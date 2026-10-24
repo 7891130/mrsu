@@ -37,6 +37,7 @@ import me.weishu.kernelsu.ui.util.getAvailablePartitions
 import me.weishu.kernelsu.ui.util.getCurrentKmi
 import me.weishu.kernelsu.ui.util.getDefaultPartition
 import me.weishu.kernelsu.ui.util.getSlotSuffix
+import me.weishu.kernelsu.ui.util.getSupportedKmis
 import me.weishu.kernelsu.ui.util.isAbDevice
 import me.weishu.kernelsu.ui.util.probeRemoteBootPartitions
 import me.weishu.kernelsu.ui.util.rootAvailable
@@ -68,6 +69,8 @@ fun InstallScreen() {
     var forceBackup by rememberSaveable { mutableStateOf(false) }
 
     val currentKmi by produceState(initialValue = "") { value = getCurrentKmi() }
+    // null 表示尚未取回；空列表表示当前 ksud 未内置任何 LKM 模块
+    val supportedKmis by produceState<List<String>?>(initialValue = null) { value = getSupportedKmis() }
     val partitions by produceState(initialValue = emptyList()) { value = getAvailablePartitions() }
     val defaultPartition by produceState(initialValue = "") { value = getDefaultPartition() }
     val rootAvailable by produceState(initialValue = false) { value = rootAvailable() }
@@ -152,10 +155,13 @@ fun InstallScreen() {
         show = showChooseKmiDialog.value,
         onDismissRequest = { showChooseKmiDialog.value = false },
         onSelected = { kmi ->
-            kmi?.let {
-                lkmSelection = LkmSelection.KmiString(it)
-                onInstall()
+            // kmi 为 null 表示用户选择"不使用 LKM"（内置模式修补）
+            if (kmi != null) {
+                lkmSelection = LkmSelection.KmiString(kmi)
+            } else {
+                lkmSelection = LkmSelection.KmiNone
             }
+            onInstall()
         }
     )
 
@@ -268,10 +274,16 @@ fun InstallScreen() {
                 is InstallMethod.SelectFile -> true
                 else -> isKmiUnknown
             }
-            if (!isLkmSelected && isKmiUnresolved) {
-                showChooseKmiDialog.value = true
-            } else {
-                onInstall()
+            val needsKmi = !isLkmSelected && isKmiUnresolved
+            when {
+                !needsKmi -> onInstall()
+                // 未内置任何 LKM 模块时无法也不应选择 KMI，直接走内置模式修补，
+                // 否则会弹出空列表弹窗并永久卡住（确认按钮恒为禁用）。
+                supportedKmis != null && supportedKmis!!.isEmpty() -> {
+                    showMessage(resources.getString(R.string.install_no_lkm_assets))
+                    onInstall()
+                }
+                else -> showChooseKmiDialog.value = true
             }
         },
         onAdvancedOptionsClicked = {

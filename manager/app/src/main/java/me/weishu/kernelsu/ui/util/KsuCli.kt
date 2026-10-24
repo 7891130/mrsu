@@ -1,12 +1,14 @@
 package me.weishu.kernelsu.ui.util
 
 import android.content.ContentResolver
+import android.content.ContentValues
 import android.content.Context
 import android.database.Cursor
 import android.net.Uri
 import android.os.Environment
 import android.os.Parcelable
 import android.os.SystemClock
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.system.Os
 import android.util.Log
@@ -43,6 +45,56 @@ private const val TAG = "KsuCli"
 
 private fun getKsuDaemonPath(): String {
     return ksuApp.applicationInfo.nativeLibraryDir + File.separator + "libksud.so"
+}
+
+/**
+ * 修补 boot 的暂存目录。
+ * 无论是否已安装，ksud 都先输出到这里，再由 [publishPatchedImages] 发布到公共下载目录。
+ * 未安装时应用既无 root 也无 MANAGE_EXTERNAL_STORAGE，按路径直写 /sdcard 会被拒绝，
+ * 因此不能直接把 -o 指向 Download。
+ */
+private fun patchOutputDir(): File {
+    val dir = File(ksuApp.getExternalFilesDir(null) ?: ksuApp.filesDir, "patch")
+    dir.mkdirs()
+    // 清掉上一次的残留，避免把旧镜像当成本次产物发布
+    dir.listFiles()?.forEach { runCatching { it.delete() } }
+    return dir
+}
+
+/**
+ * 把暂存目录里的修补镜像发布到公共下载目录，返回可展示的路径。
+ * 走 MediaStore 写入 Download/，应用无需任何存储权限，用户也能在
+ * 「文件管理 - 下载」里直接找到。
+ */
+private fun publishPatchedImages(dir: File, onStdout: (String) -> Unit) {
+    val images = dir.listFiles()?.filter { it.isFile && it.name.endsWith(".img") }.orEmpty()
+    if (images.isEmpty()) return
+    images.forEach { img ->
+        val publicPath = runCatching {
+            val resolver = ksuApp.contentResolver
+            val values = ContentValues().apply {
+                put(MediaStore.MediaColumns.DISPLAY_NAME, img.name)
+                put(MediaStore.MediaColumns.MIME_TYPE, "application/octet-stream")
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                put(MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                ?: error("insert failed")
+            resolver.openOutputStream(uri)?.use { out ->
+                img.inputStream().use { it.copyTo(out) }
+            } ?: error("openOutputStream failed")
+            values.clear()
+            values.put(MediaStore.MediaColumns.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+            "/storage/emulated/0/${Environment.DIRECTORY_DOWNLOADS}/${img.name}"
+        }.getOrNull()
+        if (publicPath != null) {
+            img.delete()
+            onStdout("- 修补结果已保存到 $publicPath")
+        } else {
+            onStdout("- 修补结果已保存到 ${img.absolutePath}")
+        }
+    }
 }
 
 data class FlashResult(val code: Int, val err: String, val showReboot: Boolean) {
@@ -411,10 +463,11 @@ fun installBoot(
         cmd += " --kmi ${lkm.value}"
     }
 
+    var stagingDir: File? = null
     if (bootFile != null) {
-        val downloadsDir =
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        cmd += " -o $downloadsDir"
+        val outDir = patchOutputDir()
+        stagingDir = outDir
+        cmd += " -o ${outDir.absolutePath}"
     }
 
     partition?.let { part ->
@@ -423,6 +476,10 @@ fun installBoot(
 
     val result = flashWithIO("${getKsuDaemonPath()} $cmd", onStdout, onStderr)
     Log.i("KernelSU", "install boot result: ${result.isSuccess}")
+
+    if (result.isSuccess) {
+        stagingDir?.let { publishPatchedImages(it, onStdout) }
+    }
 
     bootFile?.delete()
     lkmFile?.delete()
@@ -508,10 +565,9 @@ fun downloadBoot(
     }
     if (autoKmi != null) cmd += " --kmi $autoKmi"
     cmd += " --partition $partition"
-    // ksud defaults to cwd, which is read-only in the su session; use Downloads.
-    val downloadsDir =
-        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-    cmd += " -o $downloadsDir"
+    // ksud defaults to cwd, which is read-only; use an explicit staging dir.
+    val stagingDir = patchOutputDir()
+    cmd += " -o ${stagingDir.absolutePath}"
 
     val stdoutCallback: CallbackList<String?> = object : CallbackList<String?>() {
         override fun onAddElement(s: String?) {
@@ -527,6 +583,9 @@ fun downloadBoot(
     val result = Shell.getShell().newJob().add(cmd).to(stdoutCallback, stderrCallback).exec()
     lkmFile?.delete()
     bootFile.delete()
+    if (result.isSuccess) {
+        publishPatchedImages(stagingDir, onStdout)
+    }
     return FlashResult(result, false)
 }
 
@@ -583,15 +642,49 @@ fun rootAvailable(): Boolean {
 suspend fun getCurrentKmi(): String = withContext(Dispatchers.IO) {
     val shell = getRootShell()
     val cmd = "boot-info current-kmi"
-    ShellUtils.fastCmd(shell, "${getKsuDaemonPath()} $cmd")
+    val fromKsud = runCatching {
+        ShellUtils.fastCmd(shell, "${getKsuDaemonPath()} $cmd")
+    }.getOrDefault("").trim()
+
+    if (fromKsud.isNotBlank() && !fromKsud.equals("unknown", ignoreCase = true)) {
+        return@withContext fromKsud
+    }
+
+    // ksud 不可用（无 root / daemon 缺失）时，退化为本地内核版本推断，
+    // 例如 "5.10.236-android12-9-o" -> "android12-5.10"
+    deriveKmiFromLocalKernel()
+}
+
+/** 从本机内核 release 字符串推断 KMI，失败返回空串。 */
+private fun deriveKmiFromLocalKernel(): String {
+    val release = runCatching { Os.uname().release }.getOrDefault("")
+    if (release.isBlank()) return ""
+    // "5.10.236-android12-9-o" -> android12-5.10
+    Regex("""(\d+\.\d+)\S*?-(android\d+)""").find(release)?.let { match ->
+        return "${match.groupValues[2]}-${match.groupValues[1]}"
+    }
+    // "6.1.157-android14-11-gki" 之类无分隔符的写法
+    Regex("""(android\d+)-(\d+\.\d+)""").find(release)?.let { return it.value }
+    val kv = me.weishu.kernelsu.parseKernelVersion(release)
+    return when {
+        kv.major > 5 -> "android${kv.major}-${kv.patchLevel}"
+        kv.major == 5 && kv.patchLevel >= 10 -> "android12-${kv.patchLevel}"
+        else -> ""
+    }
 }
 
 suspend fun getSupportedKmis(): List<String> = withContext(Dispatchers.IO) {
-    val shell = getRootShell()
-    val cmd = "boot-info supported-kmis"
-    val out = shell.newJob().add("${getKsuDaemonPath()} $cmd").to(ArrayList(), null).exec().out
-    out.filter { it.isNotBlank() }.map { it.trim() }
+    runCatching {
+        val shell = getRootShell()
+        val cmd = "boot-info supported-kmis"
+        val out = shell.newJob().add("${getKsuDaemonPath()} $cmd").to(ArrayList(), null).exec().out
+        out.filter { it.isNotBlank() }.map { it.trim() }
+            // 过滤 ksud 的错误信息，只保留合法 KMI 名（如 android12-5.10）
+            .filter { kmiRegex.matches(it) }
+    }.getOrDefault(emptyList())
 }
+
+private val kmiRegex = Regex("""^android\d+-\d+\.\d+$""")
 
 suspend fun isAbDevice(): Boolean = withContext(Dispatchers.IO) {
     val shell = getRootShell()

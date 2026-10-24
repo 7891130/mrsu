@@ -168,12 +168,12 @@ $(info -- KSU_NEW_DCACHE_FLUSH: $(KSU_NEW_DCACHE_FLUSH))
 
 KSU_IS_PR_BUILD ?= 0
 ifeq ($(KSU_IS_PR_BUILD),0)
-KSU_PACKAGE_NAME ?= me.weishu.kernelsu
+KSU_PACKAGE_NAME ?= com.mingri.ru
 else
-KSU_PACKAGE_NAME ?= me.weishu.kernelsu.pr
+KSU_PACKAGE_NAME ?= com.mingri.ru.pr
 endif
-KSU_EXPECTED_SIZE ?= 0x033b
-KSU_EXPECTED_HASH ?= c371061b19d8c7d7d6133c6a9bafe198fa944e50c1b31c9d8daa8d7f1fc2d2d6
+KSU_EXPECTED_SIZE ?= 0x036d
+KSU_EXPECTED_HASH ?= 5ccb0ad242b96baea99ebdf96d6ee01875781a3784693d4299319155c9843f2d
 
 $(info -- KernelSU Manager package name: $(KSU_PACKAGE_NAME))
 $(info -- KernelSU Manager signature size: $(KSU_EXPECTED_SIZE))

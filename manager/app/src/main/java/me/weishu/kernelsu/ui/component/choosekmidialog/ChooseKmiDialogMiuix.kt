@@ -24,6 +24,7 @@ import me.weishu.kernelsu.R
 import me.weishu.kernelsu.ui.util.getCurrentKmi
 import me.weishu.kernelsu.ui.util.getSupportedKmis
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.overlay.OverlayDialog
 import top.yukonga.miuix.kmp.preference.CheckboxLocation
@@ -42,6 +43,7 @@ fun ChooseKmiDialogMiuix(
         value = getCurrentKmi()
     }
     val currentSelection = rememberSaveable(currentKmi) { mutableStateOf(currentKmi) }
+    val hasCandidates = supportedKMIs.isNotEmpty()
     OverlayDialog(
         show = show,
         title = stringResource(R.string.select_kmi),
@@ -53,20 +55,27 @@ fun ChooseKmiDialogMiuix(
         insideMargin = DpSize(0.dp, 24.dp),
         content = {
             Column(modifier = Modifier.heightIn(max = 500.dp)) {
-                LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
-                    items(supportedKMIs) { kmi ->
-                        CheckboxPreference(
-                            title = kmi,
-                            summary = if (kmi == currentKmi) stringResource(R.string.current_device_kmi) else null,
-                            insideMargin = PaddingValues(horizontal = 30.dp, vertical = 16.dp),
-                            checkboxLocation = CheckboxLocation.End,
-                            checked = currentSelection.value == kmi,
-                            holdDownState = currentSelection.value == kmi,
-                            onCheckedChange = { _ ->
-                                currentSelection.value = kmi
-                            }
-                        )
+                if (hasCandidates) {
+                    LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                        items(supportedKMIs) { kmi ->
+                            CheckboxPreference(
+                                title = kmi,
+                                summary = if (kmi == currentKmi) stringResource(R.string.current_device_kmi) else null,
+                                insideMargin = PaddingValues(horizontal = 30.dp, vertical = 16.dp),
+                                checkboxLocation = CheckboxLocation.End,
+                                checked = currentSelection.value == kmi,
+                                holdDownState = currentSelection.value == kmi,
+                                onCheckedChange = { _ ->
+                                    currentSelection.value = kmi
+                                }
+                            )
+                        }
                     }
+                } else {
+                    Text(
+                        text = stringResource(R.string.install_no_kmi_available),
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
+                    )
                 }
                 Spacer(Modifier.height(12.dp))
                 Row(
@@ -83,12 +92,15 @@ fun ChooseKmiDialogMiuix(
                     )
                     Spacer(modifier = Modifier.width(20.dp))
                     TextButton(
-                        enabled = supportedKMIs.contains(currentSelection.value),
+                        enabled = !hasCandidates || supportedKMIs.contains(currentSelection.value),
                         onClick = {
-                            onSelected(currentSelection.value)
+                            // 无可用 LKM 时以 null 通知调用方走内置模式修补
+                            onSelected(if (hasCandidates) currentSelection.value else null)
                             onDismissRequest()
                         },
-                        text = stringResource(R.string.confirm),
+                        text = stringResource(
+                            if (hasCandidates) R.string.confirm else R.string.install_builtin_mode
+                        ),
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.textButtonColorsPrimary()
                     )

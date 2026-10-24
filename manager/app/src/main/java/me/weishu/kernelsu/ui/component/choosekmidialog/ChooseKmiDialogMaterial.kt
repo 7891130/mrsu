@@ -37,6 +37,7 @@ fun ChooseKmiDialogMaterial(
     }
 
     val selectedKmi = remember(currentKmi) { mutableStateOf(currentKmi) }
+    val hasCandidates = supportedKMIs.isNotEmpty()
 
     AlertDialog(
         onDismissRequest = {
@@ -46,12 +47,17 @@ fun ChooseKmiDialogMaterial(
         confirmButton = {
             TextButton(
                 onClick = {
-                    onSelected(selectedKmi.value)
+                    // 无可用 LKM 时以 null 通知调用方走内置模式修补
+                    onSelected(if (hasCandidates) selectedKmi.value else null)
                     onDismissRequest()
                 },
-                enabled = supportedKMIs.contains(selectedKmi.value)
+                enabled = !hasCandidates || supportedKMIs.contains(selectedKmi.value)
             ) {
-                Text(stringResource(id = R.string.confirm))
+                Text(
+                    stringResource(
+                        id = if (hasCandidates) R.string.confirm else R.string.install_builtin_mode
+                    )
+                )
             }
         },
         dismissButton = {
@@ -72,18 +78,26 @@ fun ChooseKmiDialogMaterial(
             )
         },
         text = {
-            SegmentedColumn(
-                content = supportedKMIs.map { kmi ->
-                    {
-                        SegmentedRadioItem(
-                            title = kmi,
-                            summary = if (kmi == currentKmi) stringResource(R.string.current_device_kmi) else null,
-                            selected = selectedKmi.value == kmi,
-                            onClick = { selectedKmi.value = kmi }
-                        )
+            if (hasCandidates) {
+                SegmentedColumn(
+                    content = supportedKMIs.map { kmi ->
+                        {
+                            SegmentedRadioItem(
+                                title = kmi,
+                                summary = if (kmi == currentKmi) stringResource(R.string.current_device_kmi) else null,
+                                selected = selectedKmi.value == kmi,
+                                onClick = { selectedKmi.value = kmi }
+                            )
+                        }
                     }
-                }
-            )
+                )
+            } else {
+                Text(
+                    modifier = Modifier.fillMaxWidth(),
+                    text = stringResource(R.string.install_no_kmi_available),
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     )
 }

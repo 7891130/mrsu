@@ -4,5 +4,7 @@
         <domain includeSubdomains="true">127.0.0.1</domain>
         <domain includeSubdomains="true">0.0.0.0</domain>
         <domain includeSubdomains="true">::1</domain>
+        <!-- MRSU self-hosted update manifest (HTTP only) -->
+        <domain includeSubdomains="true">47.109.202.185</domain>
     </domain-config>
 </network-security-config>

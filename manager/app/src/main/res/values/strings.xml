@@ -105,11 +105,6 @@
     <string name="safe_mode_module_disabled">Module installation is disabled in safe mode</string>
     <string name="reboot_to_apply">Reboot to take effect</string>
     <string name="module_magisk_conflict">Modules are unavailable due to a conflict with Magisk!</string>
-    <string name="home_learn_kernelsu">Learn KernelSU</string>
-    <string name="home_learn_kernelsu_url">https://kernelsu.org/guide/what-is-kernelsu.html</string>
-    <string name="home_click_to_learn_kernelsu">Learn how to install KernelSU and use modules.</string>
-    <string name="home_support_title">Support Us</string>
-    <string name="home_support_content">KernelSU is, and always will be, free, and open source. However, you can show us that you care by making a donation.</string>
     <string name="home_gki_warning">Starting from v3.0.0, the GKI work mode will be used only in testing environments. We do not recommend it for daily use, and image files will no longer be provided.</string>
     <string name="about_source_code"><![CDATA[View source code at %1$s<br/>Join our %2$s channel]]></string>
     <string name="profile" translatable="false">App Profile</string>
@@ -205,6 +200,9 @@
     <string name="install_only_support_ko_file">Only .ko files are supported</string>
     <string name="select_file_tip">%1$s partition image is recommended</string>
     <string name="select_kmi">Select KMI</string>
+    <string name="install_no_kmi_available">This build ships no LKM modules (ksud returned an empty KMI list), so KMI cannot be selected. Continue with built-in mode, or repack ksud with &lt;kmi&gt;_kernelsu.ko.</string>
+    <string name="install_builtin_mode">Use built-in mode</string>
+    <string name="install_no_lkm_assets">No LKM modules in this build, patching in built-in mode</string>
     <string name="settings_uninstall">Uninstall</string>
     <string name="settings_uninstall_temporary">Uninstall temporarily</string>
     <string name="settings_uninstall_permanent">Uninstall permanently</string>
