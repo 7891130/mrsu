@@ -1,0 +1,17 @@
+name: MRSU Release
+
+# 一键出包：矩阵编译 8 档 GKI LKM（android12-5.10 ~ android17-6.18）
+# → 内嵌进 ksud（pack_lkm）→ 打包签名 manager APK。
+# 全部复用上游 build-manager.yml，身份参数走 kernel/Kbuild 默认值（com.mingri.ru）。
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: mrsu-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    uses: ./.github/workflows/build-manager.yml
+    secrets: inherit
