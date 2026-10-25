@@ -31,16 +31,16 @@ data class HomeUiState(
     val showGkiWarning: Boolean
         get() = ksuVersion != null && lkmMode == false
 
-    // MRSU: 保留上游的 LKM 更新入口（内部 LKM 安装/更新靠这张卡片进入 Install 页）。
-    // 注意管理器用 33000+ 发布版本号、内核 LKM 用上游 30000+git 版本号，两套编号不相等，
-    // 因此在定制版里该提示会长期常亮，这是刻意保留的可点入口，不要改成 false。
+    // MRSU: 关闭「内嵌 LKM 有可用更新」误报。
+    // 上游判据 ksuVersion == currentManagerVersionCode 的前提是「管理器版本号 == 内核 LKM 版本号」，
+    // 而定制版管理器走 33xxx 发布号、内核 LKM 走上游 30000+git 编号，两套体系永不相等，
+    // 于是即使定制 ko 直装成功（内核已绑 com.mingri.ru、root 正常工作），该提示也会长期常亮，属误报。
+    // 定制版不存在「按版本号判断 LKM 是否更新」的真实语义（内嵌 ko 与已刷内核同源）；
+    // 真正需要重刷内核的场景由 requiresNewKernel 对应的 require_kernel_version 卡片承载，
+    // 安装页入口本身也可通过点击状态卡进入（onInstallClick），因此这里恒为 false。
+    // 若后续内核侧引入独立的 LKM 版本标识，可在此接入真实比较。
     val showLkmUpdate: Boolean
-        get() = isManager &&
-                lkmMode == true &&
-                isLkmBundled &&
-                ksuVersion?.toLong() != currentManagerVersionCode &&
-                !requiresNewKernel &&
-                !requiresNewManager
+        get() = false
 
     // Jailbreak mode runs on locked bootloaders, so flashing a boot image would brick the device.
     val canInstallKernelUpdate: Boolean
