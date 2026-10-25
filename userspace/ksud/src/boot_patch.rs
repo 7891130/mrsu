@@ -19,9 +19,35 @@ use regex_lite::Regex;
 use crate::assets;
 use crate::feature_id::{FeatureId, parse_feature_id};
 
+/// Map a bare kernel series (e.g. `6.6.118` -> `(6, 6)`) onto its GKI KMI name.
+///
+/// Vendor kernels (MTK/Qualcomm) frequently drop the `androidNN` marker from
+/// `uname -r` / the kernel banner, so the KMI has to be derivable from the
+/// kernel version alone; otherwise direct install refuses to run on real devices.
+fn kmi_from_series(major: u32, minor: u32) -> Option<&'static str> {
+    match (major, minor) {
+        (5, 10) => Some("android12-5.10"),
+        (5, 15) => Some("android13-5.15"),
+        (6, 1) => Some("android14-6.1"),
+        (6, 6) => Some("android15-6.6"),
+        (6, 12) => Some("android16-6.12"),
+        (6, 18) => Some("android17-6.18"),
+        _ => None,
+    }
+}
+
+fn kmi_from_release_text(text: &str) -> Option<String> {
+    let re = Regex::new(r"(\d+)\.(\d+)").ok()?;
+    let cap = re.captures(text)?;
+    let major = cap.get(1)?.as_str().parse::<u32>().ok()?;
+    let minor = cap.get(2)?.as_str().parse::<u32>().ok()?;
+    kmi_from_series(major, minor).map(str::to_owned)
+}
+
 #[cfg(target_os = "android")]
 mod android {
     use super::Result;
+    use super::{kmi_from_release_text, kmi_from_series};
     pub(super) use crate::defs::{BACKUP_FILENAME, KSU_BACKUP_DIR, KSU_BACKUP_FILE_PREFIX};
     use crate::defs::{DEFAULT_PACKAGE_NAME, KSU_TEMP_BACKUP_DIR_NAME};
     use android_bootimg::cpio::{Cpio, CpioEntry};
@@ -69,12 +95,19 @@ mod android {
 
     fn parse_kmi(version: &str) -> Result<String> {
         let re = Regex::new(r"(.* )?(\d+\.\d+)(\S+)?(android\d+)(.*)")?;
-        let cap = re
-            .captures(version)
-            .ok_or_else(|| anyhow::anyhow!("Failed to get KMI from boot/modules"))?;
-        let android_version = cap.get(4).map_or("", |m| m.as_str());
-        let kernel_version = cap.get(2).map_or("", |m| m.as_str());
-        Ok(format!("{android_version}-{kernel_version}"))
+        if let Some(cap) = re.captures(version) {
+            let android_version = cap.get(4).map_or("", |m| m.as_str());
+            let kernel_version = cap.get(2).map_or("", |m| m.as_str());
+            return Ok(format!("{android_version}-{kernel_version}"));
+        }
+        // Vendor kernels (MTK/Qualcomm) frequently strip the `androidNN` marker
+        // from `uname -r`. Derive the GKI series from the kernel version alone so
+        // direct install still resolves to the right embedded LKM instead of
+        // failing on such devices.
+        if let Some(kmi) = kmi_from_release_text(version) {
+            return Ok(kmi);
+        }
+        bail!("Failed to get KMI from boot/modules")
     }
 
     fn parse_kmi_from_uname() -> Result<String> {
@@ -330,7 +363,19 @@ fn map_file(file: &Path) -> Result<Mmap> {
 }
 
 pub fn parse_kmi(buffer: &[u8]) -> Result<String> {
-    let re = Regex::new(r"(\d+\.\d+)(?:\S+)?(android\d+)").context("Failed to compile regex")?;
+    if let Some(kmi) = parse_kmi_marker(buffer) {
+        return Ok(kmi);
+    }
+    if let Some(kmi) = parse_kmi_from_banner_series(buffer) {
+        return Ok(kmi);
+    }
+    println!("- Failed to get KMI version");
+    bail!("Try to choose LKM manually")
+}
+
+/// Locate the `androidNN` KMI marker inside the kernel banner (canonical GKI path).
+fn parse_kmi_marker(buffer: &[u8]) -> Option<String> {
+    let re = Regex::new(r"(\d+\.\d+)(?:\S+)?(android\d+)").ok()?;
     buffer
         .windows(4)
         .enumerate()
@@ -345,24 +390,34 @@ pub fn parse_kmi(buffer: &[u8]) -> Result<String> {
         })
         .find_map(|(i, _)| {
             let a = &buffer[i..buffer.len().min(i + 100)];
-            if let Some(e) = a.iter().position(|c| *c == 0)
-                && let Ok(s) = std::str::from_utf8(&a[..e])
-                && let Some(caps) = re.captures(s)
-                && let (Some(kernel_version), Some(android_version)) = (caps.get(1), caps.get(2))
-            {
-                Some(format!(
-                    "{}-{}",
-                    android_version.as_str(),
-                    kernel_version.as_str()
-                ))
-            } else {
-                None
-            }
+            let e = a.iter().position(|c| *c == 0)?;
+            let s = std::str::from_utf8(&a[..e]).ok()?;
+            let caps = re.captures(s)?;
+            let kernel_version = caps.get(1)?;
+            let android_version = caps.get(2)?;
+            Some(format!(
+                "{}-{}",
+                android_version.as_str(),
+                kernel_version.as_str()
+            ))
         })
-        .ok_or_else(|| {
-            println!("- Failed to get KMI version");
-            anyhow!("Try to choose LKM manually")
-        })
+}
+
+/// Fallback for vendor kernels whose banner carries no `androidNN` marker:
+/// derive the GKI series from `Linux version X.Y.Z` instead of failing.
+fn parse_kmi_from_banner_series(buffer: &[u8]) -> Option<String> {
+    const MARKER: &[u8] = b"Linux version ";
+    let start = buffer
+        .windows(MARKER.len())
+        .position(|window| window == MARKER)?
+        + MARKER.len();
+    let tail = buffer.get(start..buffer.len().min(start + 64))?;
+    let end = tail
+        .iter()
+        .position(|c| *c == 0 || *c == b' ')
+        .unwrap_or(tail.len());
+    let text = std::str::from_utf8(&tail[..end]).ok()?;
+    kmi_from_release_text(text)
 }
 
 fn parse_kmi_from_kernel(kernel: &Path) -> Result<String> {
@@ -1134,6 +1189,38 @@ fn rebuild_without_ksu(
     let mut buf = Cursor::new(Vec::<u8>::with_capacity(boot_image.get_size()));
     patcher.patch(&mut buf)?;
     Ok(buf.into_inner())
+}
+
+#[cfg(test)]
+mod kmi_series_tests {
+    use super::*;
+
+    #[test]
+    fn derives_kmi_from_bare_vendor_release() {
+        // MTK/Qualcomm kernels often omit the `androidNN` marker entirely.
+        assert_eq!(kmi_from_release_text("6.6.118").unwrap(), "android15-6.6");
+        assert_eq!(kmi_from_release_text("6.6.30-4k").unwrap(), "android15-6.6");
+        assert_eq!(
+            kmi_from_release_text("6.12.76-android16-8-gdeadbeef").unwrap(),
+            "android16-6.12"
+        );
+        assert_eq!(kmi_from_release_text("5.10.252").unwrap(), "android12-5.10");
+        assert_eq!(kmi_from_release_text("5.15.202").unwrap(), "android13-5.15");
+        assert_eq!(kmi_from_release_text("6.1.166").unwrap(), "android14-6.1");
+        assert_eq!(kmi_from_release_text("6.18.32-4k").unwrap(), "android17-6.18");
+        // Unsupported series must stay unsupported rather than guessing.
+        assert!(kmi_from_release_text("4.19.191").is_none());
+        assert!(kmi_from_release_text("5.4.210").is_none());
+    }
+
+    #[test]
+    fn banner_fallback_handles_kernel_without_android_marker() {
+        let banner = b"\x00Linux version 6.6.118-mtk-g1a2b3c4d (build@host) #1 SMP\0";
+        assert_eq!(parse_kmi(banner).unwrap(), "android15-6.6");
+        // The canonical marker still wins when present.
+        let gki = b"Linux version 6.1.157-android14-11-gki\0";
+        assert_eq!(parse_kmi(gki).unwrap(), "android14-6.1");
+    }
 }
 
 #[cfg(test)]
