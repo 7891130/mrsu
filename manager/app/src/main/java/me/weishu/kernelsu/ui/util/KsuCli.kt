@@ -31,8 +31,11 @@ import me.weishu.kernelsu.ksuApp
 import okhttp3.OkHttpClient
 import org.json.JSONArray
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
+import java.io.RandomAccessFile
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 import java.util.zip.ZipFile
@@ -442,14 +445,61 @@ fun installBoot(
         }
     }
 
-    var cmd = "boot-patch"
-
-    cmd += if (bootFile == null) {
-        // no boot.img, use -f to flash
-        " -f"
-    } else {
-        " -b ${bootFile.absolutePath}"
+    // Direct install used to rely on `ksud boot-patch -f`, which lets ksud
+    // unpack the live boot partition by itself. Boot partitions dumped from
+    // some OEM devices (MTK/OPPO) carry a non-standard AVB footer, which
+    // ksud's parser rejects ("invalid avb header"), so direct install failed
+    // every single time on those devices. We now dump the partition by
+    // ourselves, strip the AVB tail (vbmeta + footer) while keeping the boot
+    // signature, patch that clean image, and flash the result back with dd.
+    var directDev: String? = null
+    var directRaw: File? = null
+    var directImage: File? = null
+    if (bootFile == null) {
+        val dev = resolveBootPartition(partition, onStderr)
+        if (dev == null) {
+            return FlashResult(-1, "Unable to locate the current boot partition", false)
+        }
+        onStdout("- Reading current boot partition ($dev)")
+        val rawDir = patchOutputDir().apply { mkdirs() }
+        val raw = File(rawDir, "direct-raw.img")
+        raw.delete()
+        val tmpRaw = "/data/local/tmp/mrsu_boot_raw.img"
+        val dump = getRootShell().newJob()
+            .add("rm -f $tmpRaw")
+            .add("dd if=$dev of=$tmpRaw bs=4096")
+            .add("chmod 666 $tmpRaw")
+            .add("cp -f $tmpRaw ${raw.absolutePath}")
+            .add("chmod 666 ${raw.absolutePath}")
+            .exec()
+        if (!raw.exists() || raw.length() == 0L) {
+            raw.delete()
+            onStderr(dump.err.joinToString("\n"))
+            return FlashResult(-1, "Failed to read the boot partition", false)
+        }
+        val clean = File(rawDir, "direct-boot.img")
+        if (!stripAvbTail(raw, clean, onStdout)) {
+            raw.delete()
+            clean.delete()
+            return FlashResult(-1, "Unsupported boot image layout", false)
+        }
+        onStdout("- Boot image prepared (${clean.length()} bytes)")
+        // ksud runs as root and cannot read the app-private staging file, so the
+        // trimmed image is rebuilt inside /data/local/tmp for the patch step.
+        val tmpClean = "/data/local/tmp/mrsu_boot_clean.img"
+        getRootShell().newJob()
+            .add("rm -f $tmpClean")
+            .add("head -c ${clean.length()} $tmpRaw > $tmpClean")
+            .add("chmod 644 $tmpClean")
+            .exec()
+        directDev = dev
+        directRaw = raw
+        directImage = File(tmpClean)
     }
+
+    val imageFile = bootFile ?: directImage
+
+    var cmd = "boot-patch -b ${imageFile!!.absolutePath}"
     cmd += bootPatchFlags(allowShell, enableAdb, forceBackup)
 
     if (ota) {
@@ -463,12 +513,9 @@ fun installBoot(
         cmd += " --kmi ${lkm.value}"
     }
 
-    var stagingDir: File? = null
-    if (bootFile != null) {
-        val outDir = patchOutputDir()
-        stagingDir = outDir
-        cmd += " -o ${outDir.absolutePath}"
-    }
+    val stagingDir = patchOutputDir()
+    cmd += " -o ${stagingDir.absolutePath}"
+    val existingImages = stagingDir.listFiles()?.map { it.absolutePath }?.toSet() ?: emptySet()
 
     partition?.let { part ->
         cmd += " --partition $part"
@@ -477,12 +524,60 @@ fun installBoot(
     val result = flashWithIO("${getKsuDaemonPath()} $cmd", onStdout, onStderr)
     Log.i("KernelSU", "install boot result: ${result.isSuccess}")
 
+    // Direct install patches a local copy, so the result has to be written
+    // back to the partition manually (the old "-f" path did it inside ksud).
+    var flashError: String? = null
+    if (result.isSuccess && directDev != null) {
+        val patched = stagingDir.listFiles()
+            ?.filter {
+                it.isFile && it.name.startsWith("kernelsu_patched") && it.absolutePath !in existingImages
+            }
+            ?.maxByOrNull { it.lastModified() }
+        if (patched == null) {
+            flashError = "Patched image not found in ${stagingDir.absolutePath}"
+        } else {
+            // Keep a copy of the stock image next to the patched one, so it
+            // gets published to Download as a rollback point.
+            directRaw?.let { raw ->
+                runCatching {
+                    raw.copyTo(File(stagingDir, "boot_backup_${System.currentTimeMillis()}.img"), true)
+                }
+            }
+            // `su` runs in the ksu domain, which cannot write block devices by
+            // default; grant the permission on the runtime policy first.
+            runCatching {
+                getRootShell().newJob()
+                    .add(
+                        "${getKsuDaemonPath()} sepolicy patch " +
+                            "\"allow ksu block_device:blk_file { open write }\""
+                    )
+                    .exec()
+            }
+            onStdout("- Flashing patched image to $directDev")
+            val write = getRootShell().newJob()
+                .add("dd if=${patched.absolutePath} of=$directDev bs=4096 conv=fsync")
+                .exec()
+            if (write.isSuccess) {
+                onStdout("- Flashed successfully")
+            } else {
+                onStderr(write.err.joinToString("\n"))
+                flashError = "Failed to write the patched image back"
+            }
+        }
+    }
+
     if (result.isSuccess) {
-        stagingDir?.let { publishPatchedImages(it, onStdout) }
+        publishPatchedImages(stagingDir, onStdout)
     }
 
     bootFile?.delete()
+    directImage?.delete()
+    directRaw?.delete()
     lkmFile?.delete()
+
+    if (flashError != null && result.isSuccess) {
+        return FlashResult(-1, flashError, false)
+    }
 
     // if boot uri is empty, it is direct install, when success, we should show reboot button
     val showReboot = bootUri == null && result.isSuccess // we create a temporary val here, to avoid calc showReboot double
@@ -490,6 +585,105 @@ fun installBoot(
         install() // install ksud here
     }
     return FlashResult(result, showReboot)
+}
+
+private fun alignUp(value: Long, alignment: Long): Long =
+    if (alignment <= 0L) value else (value + alignment - 1L) / alignment * alignment
+
+/**
+ * Resolves the block device of the partition that currently boots the device.
+ */
+private fun resolveBootPartition(partition: String?, onStderr: (String) -> Unit): String? {
+    val slot = runCatching {
+        getRootShell().newJob().add("getprop ro.boot.slot_suffix").exec()
+            .out.joinToString("").trim()
+    }.getOrDefault("")
+
+    val names = LinkedHashSet<String>()
+    if (!partition.isNullOrBlank()) {
+        names += partition
+        if (slot.isNotEmpty()) names += "$partition$slot"
+    }
+    if (slot.isNotEmpty()) names += "boot$slot"
+    names += "boot_a"
+    names += "boot"
+    if (slot.isNotEmpty()) names += "init_boot$slot"
+    names += "init_boot_a"
+    names += "init_boot"
+
+    for (name in names) {
+        val path = "/dev/block/by-name/$name"
+        val exists = runCatching {
+            getRootShell().newJob()
+                .add("test -e $path")
+                .exec()
+                .isSuccess
+        }.getOrDefault(false)
+        if (exists) return path
+    }
+    onStderr("No boot partition found under /dev/block/by-name")
+    return null
+}
+
+/**
+ * Copies only the real boot image out of a raw partition dump, dropping the
+ * AVB trailer (vbmeta + footer) that some OEM partitions carry in a layout
+ * ksud cannot parse. Header, kernel, ramdisk and the boot signature are kept.
+ */
+private fun stripAvbTail(raw: File, out: File, onStdout: (String) -> Unit): Boolean {
+    try {
+        RandomAccessFile(raw, "r").use { src ->
+            val head = ByteArray(4096)
+            if (src.read(head) < 1660) return false
+            if (String(head, 0, 8, StandardCharsets.US_ASCII) != "ANDROID!") {
+                onStdout("- Not an Android boot image")
+                return false
+            }
+            val buf = ByteBuffer.wrap(head).order(ByteOrder.LITTLE_ENDIAN)
+            val kernelSize = buf.getInt(8).toLong() and 0xFFFFFFFFL
+            val version = buf.getInt(40)
+            // v3/v4 moved ramdisk_size from offset 16 to offset 12.
+            val ramdiskSize = if (version >= 3) {
+                buf.getInt(12).toLong() and 0xFFFFFFFFL
+            } else {
+                buf.getInt(16).toLong() and 0xFFFFFFFFL
+            }
+            val pageSize = if (version >= 3) 4096L else (buf.getInt(36).toLong() and 0xFFFFFFFFL)
+            if (pageSize <= 0L || pageSize > 65536L) return false
+            val headerSize = if (version >= 3) {
+                buf.getInt(20).toLong() and 0xFFFFFFFFL
+            } else {
+                pageSize
+            }
+            // v3/v4 header is capped at 4096 bytes; anything bigger is bogus.
+            if (headerSize <= 0L || headerSize > 4096L) return false
+            val signatureSize = if (version >= 4) buf.getInt(1580).toLong() and 0xFFFFFFFFL else 0L
+            val kernelStart = alignUp(headerSize, pageSize)
+            val ramdiskStart = alignUp(kernelStart + kernelSize, pageSize)
+            val total = alignUp(ramdiskStart + ramdiskSize, pageSize) + signatureSize
+            if (total <= 0L || total > src.length()) {
+                onStdout("- Unexpected boot image size ($total / ${src.length()})")
+                return false
+            }
+            src.seek(0)
+            out.delete()
+            var remaining = total
+            FileOutputStream(out).use { dst ->
+                val chunk = ByteArray(1 shl 20)
+                while (remaining > 0L) {
+                    val read = src.read(chunk, 0, minOf(remaining, chunk.size.toLong()).toInt())
+                    if (read <= 0) break
+                    dst.write(chunk, 0, read)
+                    remaining -= read
+                }
+                dst.flush()
+            }
+            return remaining == 0L
+        }
+    } catch (e: Exception) {
+        onStdout("- Failed to prepare the boot image: ${e.message}")
+        return false
+    }
 }
 
 fun downloadBoot(

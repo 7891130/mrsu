@@ -169,6 +169,16 @@ fun HomePagerMiuix(
                             systemInfo = state.systemInfo,
                             modifier = Modifier.fillMaxWidth(),
                         )
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = stringResource(R.string.home_author),
+                                fontSize = MiuixTheme.textStyles.body2.fontSize,
+                                color = colorScheme.onSurfaceVariantSummary,
+                            )
+                        }
                         Spacer(
                             Modifier.height(
                                 bottomInnerPadding + if (!Natives.isFullFeatured())

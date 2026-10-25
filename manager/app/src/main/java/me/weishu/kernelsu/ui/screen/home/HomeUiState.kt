@@ -31,6 +31,9 @@ data class HomeUiState(
     val showGkiWarning: Boolean
         get() = ksuVersion != null && lkmMode == false
 
+    // MRSU: 保留上游的 LKM 更新入口（内部 LKM 安装/更新靠这张卡片进入 Install 页）。
+    // 注意管理器用 33000+ 发布版本号、内核 LKM 用上游 30000+git 版本号，两套编号不相等，
+    // 因此在定制版里该提示会长期常亮，这是刻意保留的可点入口，不要改成 false。
     val showLkmUpdate: Boolean
         get() = isManager &&
                 lkmMode == true &&

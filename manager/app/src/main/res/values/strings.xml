@@ -373,4 +373,5 @@
     <string name="script_param_below_min">Must be at least %d</string>
     <string name="script_param_above_max">Must be at most %d</string>
     <string name="script_param_invalid">Invalid value</string>
+    <string name="home_author">作者：明小日</string>
 </resources>
