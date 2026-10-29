@@ -869,6 +869,31 @@ pub fn patch(args: BootPatchArgs) -> Result<()> {
             };
 
         if !no_install {
+            {
+                // A wrong asset behind the `ksuinit` name (e.g. busybox packed
+                // by a mis-indexed embed) is only discoverable after a reboot
+                // as a bootloop, so validate it before touching the ramdisk.
+                let init_data: &[u8] = ksu_init.as_ref().as_ref();
+                ensure!(
+                    init_data.starts_with(b"\x7fELF"),
+                    "ksuinit asset is not an ELF binary ({} bytes), refusing to patch",
+                    init_data.len()
+                );
+                ensure!(
+                    init_data.windows(15).any(|w| w == b"Hello, KernelSU"),
+                    "ksuinit asset is missing the KernelSU banner, refusing to patch"
+                );
+                ensure!(
+                    !init_data.windows(14).any(|w| w == b"Usage: busybox"),
+                    "ksuinit asset looks like busybox, refusing to patch"
+                );
+                println!(
+                    "- ksuinit: {} bytes, sha256 {}",
+                    init_data.len(),
+                    sha256::digest(init_data)
+                );
+            }
+
             ensure!(
                 !cpio.is_magisk_patched(),
                 "Cannot work with Magisk patched image"

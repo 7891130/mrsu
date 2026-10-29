@@ -5,6 +5,8 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.add
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -41,11 +44,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -234,6 +240,9 @@ private fun TopBar(
     }
 }
 
+// 首页状态卡背景图原图尺寸 1080x1394，宽度铺满，高度按图片比例
+private const val HomeStatusCardAspect = 1080f / 1394f
+
 @Composable
 private fun StatusCard(
     state: HomeUiState,
@@ -258,19 +267,15 @@ private fun StatusCard(
                 val workingText = "${stringResource(id = R.string.home_working)}$workingState"
 
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(IntrinsicSize.Min),
+                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Card(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(HomeStatusCardAspect),
                         colors = CardDefaults.defaultColors(
-                            color = when {
-                                isDynamicColor -> colorScheme.secondaryContainer
-                                isInDarkTheme() -> Color(0xFF1A3825)
-                                else -> Color(0xFFDFFAE4)
-                            }
+                            color = Color.Transparent
                         ),
                         onClick = {
                             if (!state.isLateLoadMode) {
@@ -281,6 +286,23 @@ private fun StatusCard(
                         pressFeedbackType = PressFeedbackType.Tilt
                     ) {
                         Box {
+                            Image(
+                                painter = painterResource(R.drawable.home_status_bg),
+                                contentDescription = null,
+                                modifier = Modifier.matchParentSize(),
+                                contentScale = ContentScale.Crop,
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .matchParentSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            0.0f to Color.Black.copy(alpha = 0.34f),
+                                            0.42f to Color.Black.copy(alpha = 0.12f),
+                                            1.0f to Color.Black.copy(alpha = 0.55f),
+                                        )
+                                    )
+                            )
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -290,11 +312,7 @@ private fun StatusCard(
                                 Icon(
                                     modifier = Modifier.size(110.dp),
                                     imageVector = Icons.Rounded.CheckCircleOutline,
-                                    tint = if (isDynamicColor) {
-                                        colorScheme.primary.copy(alpha = 0.8f)
-                                    } else {
-                                        Color(0xFF36D167)
-                                    },
+                                    tint = Color.White.copy(alpha = 0.85f),
                                     contentDescription = null
                                 )
                             }
@@ -307,6 +325,7 @@ private fun StatusCard(
                                 ) {
                                     Text(
                                         text = workingMode,
+                                        color = Color.White,
                                         fontSize = 16.sp,
                                         fontWeight = FontWeight.Medium,
                                     )
@@ -321,6 +340,7 @@ private fun StatusCard(
                                 Column {
                                     Text(
                                         text = workingText,
+                                        color = Color.White,
                                         fontSize = 22.sp,
                                         fontWeight = FontWeight.SemiBold,
                                     )
@@ -332,26 +352,15 @@ private fun StatusCard(
                                                 "${state.ksuVersion}-${state.kernelUAPIVersion}"
                                             ),
                                             modifier = Modifier.weight(1f, fill = false),
+                                            color = Color.White.copy(alpha = 0.9f),
                                             fontSize = 15.sp,
                                         )
                                         if (state.showCustomLkmBadge) {
                                             Spacer(Modifier.width(8.dp))
                                             StatusTag(
                                                 label = stringResource(R.string.home_lkm_custom),
-                                                contentColor = if (isDynamicColor) {
-                                                    colorScheme.onTertiaryContainer
-                                                } else if (isInDarkTheme()) {
-                                                    Color(0xFFB8E8C5)
-                                                } else {
-                                                    Color(0xFF164A29)
-                                                },
-                                                backgroundColor = if (isDynamicColor) {
-                                                    colorScheme.tertiaryContainer
-                                                } else if (isInDarkTheme()) {
-                                                    Color(0xFF315D3E)
-                                                } else {
-                                                    Color(0xFFB8E8C5)
-                                                },
+                                                contentColor = Color.White,
+                                                backgroundColor = Color.White.copy(alpha = 0.22f),
                                             )
                                         }
                                     }

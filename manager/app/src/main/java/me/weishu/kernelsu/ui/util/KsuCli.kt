@@ -641,37 +641,61 @@ fun rootAvailable(): Boolean {
 
 suspend fun getCurrentKmi(): String = withContext(Dispatchers.IO) {
     val shell = getRootShell()
-    val cmd = "boot-info current-kmi"
-    val fromKsud = runCatching {
-        ShellUtils.fastCmd(shell, "${getKsuDaemonPath()} $cmd")
-    }.getOrDefault("").trim()
 
-    if (fromKsud.isNotBlank() && !fromKsud.equals("unknown", ignoreCase = true)) {
-        return@withContext fromKsud
+    // 有 root 时优先问 ksud（它同时会读 /vendor/lib/modules 的 vermagic，最准）
+    if (shell.isRoot) {
+        val fromKsud = runCatching {
+            ShellUtils.fastCmd(shell, "${getKsuDaemonPath()} boot-info current-kmi")
+        }.getOrDefault("").trim()
+        if (fromKsud.isNotBlank() && !fromKsud.equals("unknown", ignoreCase = true)) {
+            return@withContext fromKsud
+        }
     }
 
-    // ksud 不可用（无 root / daemon 缺失）时，退化为本地内核版本推断，
-    // 例如 "5.10.236-android12-9-o" -> "android12-5.10"
-    deriveKmiFromLocalKernel()
+    // 未 root（典型场景：从零直装）时本地解析 /proc/version。
+    // 普通 App 就能读，且与 ksud 侧 parse_kmi_from_uname 的规则一致：
+    // 优先取内核串里的 androidNN 标记（GKI 标准），没有标记时按内核系列兜底。
+    parseKmiFromText(readKernelVersionText())
 }
 
-/** 从本机内核 release 字符串推断 KMI，失败返回空串。 */
-private fun deriveKmiFromLocalKernel(): String {
-    val release = runCatching { Os.uname().release }.getOrDefault("")
-    if (release.isBlank()) return ""
-    // "5.10.236-android12-9-o" -> android12-5.10
-    Regex("""(\d+\.\d+)\S*?-(android\d+)""").find(release)?.let { match ->
-        return "${match.groupValues[2]}-${match.groupValues[1]}"
-    }
-    // "6.1.157-android14-11-gki" 之类无分隔符的写法
-    Regex("""(android\d+)-(\d+\.\d+)""").find(release)?.let { return it.value }
-    val kv = me.weishu.kernelsu.parseKernelVersion(release)
-    return when {
-        kv.major > 5 -> "android${kv.major}-${kv.patchLevel}"
-        kv.major == 5 && kv.patchLevel >= 10 -> "android12-${kv.patchLevel}"
-        else -> ""
-    }
+/** 读内核版本串（/proc/version），失败返回空串。 */
+private fun readKernelVersionText(): String {
+    val fromProc = runCatching { java.io.File("/proc/version").readText() }
+        .getOrElse { "" }
+    if (fromProc.isNotBlank()) return fromProc
+    // /proc 被限制时退回 uname，逻辑等价
+    return runCatching { System.getProperty("os.version").orEmpty() }.getOrDefault("")
 }
+
+/**
+ * 从内核版本串推导 KMI 名。
+ * - 带 androidNN 标记：`5.10.198-android12-9-g...` -> `android12-5.10`
+ * - 无标记且内核系列唯一对应：`6.1.75-...` -> `android14-6.1`
+ * - 无标记且有歧义（5.10 可能是 android12/13，5.15 可能是 android13/14）返回空串，
+ *   交给「选择 KMI」弹窗，绝不瞎猜。
+ */
+internal fun parseKmiFromText(text: String): String {
+    if (text.isBlank()) return ""
+
+    val marked = Regex("""(\d+\.\d+)\S*?(android\d+)""").find(text)
+    if (marked != null) {
+        val series = marked.groupValues[1]
+        val marker = marked.groupValues[2]
+        return "$marker-$series"
+    }
+
+    val seriesMatch = Regex("""(\d+)\.(\d+)""").find(text) ?: return ""
+    val series = "${seriesMatch.groupValues[1]}.${seriesMatch.groupValues[2]}"
+    return unambiguousKmiBySeries[series].orEmpty()
+}
+
+/** 内核系列 -> 唯一 KMI 的映射（有歧义的系列不列入）。 */
+private val unambiguousKmiBySeries = mapOf(
+    "6.1" to "android14-6.1",
+    "6.6" to "android15-6.6",
+    "6.12" to "android16-6.12",
+    "6.18" to "android17-6.18",
+)
 
 suspend fun getSupportedKmis(): List<String> = withContext(Dispatchers.IO) {
     runCatching {

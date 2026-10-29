@@ -5,13 +5,18 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
@@ -49,11 +54,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
@@ -132,6 +141,16 @@ fun HomePagerMaterial(
                 actions = actions,
             )
             InfoCard(systemInfo = state.systemInfo)
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = stringResource(R.string.home_author),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Spacer(
                 Modifier.height(
                     bottomInnerPadding + if (!Natives.isFullFeatured())
@@ -187,6 +206,14 @@ private fun TopBar(
         scrollBehavior = scrollBehavior
     )
 }
+
+// 首页状态卡背景图原图尺寸 1080x1394，宽度铺满，高度按图片比例
+private const val HomeStatusCardAspect = 1080f / 1394f
+
+private val HomeStatusShadow = Shadow(
+    color = Color.Black.copy(alpha = 0.45f),
+    blurRadius = 10f,
+)
 
 @Composable
 private fun StatusCard(
@@ -250,9 +277,11 @@ private fun StatusCard(
         } else null
 
         Surface(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(HomeStatusCardAspect),
             color = containerColor,
-            contentColor = contentColor,
+            contentColor = Color.White,
             shape = MaterialTheme.shapes.large,
             onClick = {
                 if (!state.isLateLoadMode) {
@@ -260,8 +289,28 @@ private fun StatusCard(
                 }
             }
         ) {
-            ListItem(
-                modifier = Modifier,
+            Box(modifier = Modifier.fillMaxSize()) {
+                Image(
+                    painter = painterResource(R.drawable.home_status_bg),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                                Brush.verticalGradient(
+                                    0.0f to Color.Black.copy(alpha = 0.34f),
+                                    0.42f to Color.Black.copy(alpha = 0.12f),
+                                    1.0f to Color.Black.copy(alpha = 0.55f),
+                                )
+                        )
+                )
+                ListItem(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 4.dp),
                 leadingContent = {
                     Icon(statusIcon, contentDescription = statusTitle)
                 },
@@ -287,17 +336,19 @@ private fun StatusCard(
                 verticalAlignment = Alignment.CenterVertically,
                 colors = ListItemDefaults.colors(
                     containerColor = Color.Transparent,
-                    contentColor = contentColor,
-                    leadingContentColor = contentColor,
-                    trailingContentColor = contentColor,
-                    supportingContentColor = contentColor.copy(alpha = 0.7f)
+                    contentColor = Color.White,
+                    leadingContentColor = Color.White,
+                    trailingContentColor = Color.White,
+                    supportingContentColor = Color.White.copy(alpha = 0.85f)
                 ),
                 elevation = ListItemDefaults.elevation(),
                 content = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = statusTitle,
-                            style = MaterialTheme.typography.titleMediumEmphasized
+                            style = MaterialTheme.typography.titleMediumEmphasized.copy(
+                                shadow = HomeStatusShadow
+                            )
                         )
                         if (ksuActive && state.isSafeMode) {
                             Spacer(Modifier.width(8.dp))
@@ -317,7 +368,8 @@ private fun StatusCard(
                         }
                     }
                 },
-            )
+                )
+            }
         }
     }
 }

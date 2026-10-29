@@ -271,18 +271,13 @@ fun InstallScreen() {
                 // The download flow extracts the KMI itself; no manual
                 // selection needed.
                 is InstallMethod.DownloadFile -> false
-                is InstallMethod.SelectFile -> true
+                // 其余流程（本地镜像 / 直接安装）只在无法确定设备 KMI 时才弹窗：
+                // KMI 能自动解析时必须自动选对，绝不把「猜」的机会留给用户。
                 else -> isKmiUnknown
             }
             val needsKmi = !isLkmSelected && isKmiUnresolved
             when {
                 !needsKmi -> onInstall()
-                // 未内置任何 LKM 模块时无法也不应选择 KMI，直接走内置模式修补，
-                // 否则会弹出空列表弹窗并永久卡住（确认按钮恒为禁用）。
-                supportedKmis != null && supportedKmis!!.isEmpty() -> {
-                    showMessage(resources.getString(R.string.install_no_lkm_assets))
-                    onInstall()
-                }
                 else -> showChooseKmiDialog.value = true
             }
         },
