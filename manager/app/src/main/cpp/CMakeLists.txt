@@ -16,8 +16,8 @@ add_library(kernelsu
         ksu.cc
         )
 
-# MRSU: cpp/uapi 是本地 junction，git 不跟踪；CI 中必须回指仓库根 uapi 才能找到 uapi/ksu.h
-target_include_directories(kernelsu PRIVATE . ${CMAKE_CURRENT_SOURCE_DIR}/../../../../../uapi)
+# MRSU: cpp/uapi 是本地 junction，git 不跟踪；CI 中必须回指仓库根，才能解析 #include "uapi/ksu.h"
+target_include_directories(kernelsu PRIVATE . ${CMAKE_CURRENT_SOURCE_DIR}/../../../../..)
 
 find_library(log-lib log)
 
