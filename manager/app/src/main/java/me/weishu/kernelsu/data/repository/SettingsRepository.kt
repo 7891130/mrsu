@@ -9,6 +9,18 @@ interface SettingsRepository {
     var keyColor: Int
     var colorStyle: String
     var colorSpec: String
+
+    /** Absolute path of the user-chosen app background image; empty means disabled. */
+    var appBackgroundPath: String
+
+    /** How opaque the theme surface stays on top of the background image (0f..0.95f). */
+    var appBackgroundDim: Float
+
+    /**
+     * How dark the cards, lists and sheets stay on top of the background image (0f..0.95f).
+     * A negative value means "follow [appBackgroundDim]".
+     */
+    var appCardDim: Float
     var enablePredictiveBack: Boolean
     var enableSwipeDismiss: Boolean
     var pagerInterceptionMode: Int

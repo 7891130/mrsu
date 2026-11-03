@@ -38,8 +38,11 @@ import androidx.compose.material.icons.rounded.AspectRatio
 import androidx.compose.material.icons.rounded.BlurOn
 import androidx.compose.material.icons.rounded.CallToAction
 import androidx.compose.material.icons.rounded.Colorize
+import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.DesignServices
+import androidx.compose.material.icons.rounded.Image
+import androidx.compose.material.icons.rounded.Opacity
 import androidx.compose.material.icons.rounded.Pin
 import androidx.compose.material.icons.rounded.Style
 import androidx.compose.material.icons.rounded.Wallpaper
@@ -74,6 +77,7 @@ import me.weishu.kernelsu.R
 import me.weishu.kernelsu.ui.component.bottombar.useNavigationRail
 import me.weishu.kernelsu.ui.component.miuix.ScaleDialog
 import me.weishu.kernelsu.ui.theme.LocalEnableBlur
+import me.weishu.kernelsu.ui.util.hasAppBackground
 import me.weishu.kernelsu.ui.theme.keyColorOptions
 import me.weishu.kernelsu.ui.util.BlurredBar
 import me.weishu.kernelsu.ui.util.rememberBlurBackdrop
@@ -97,6 +101,8 @@ import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
+
+private const val SHOW_APP_BACKGROUND_SETTINGS = false
 
 @Composable
 fun ColorPaletteScreenMiuix(
@@ -285,30 +291,125 @@ fun ColorPaletteScreenMiuix(
                         }
                     }
 
+                    if (SHOW_APP_BACKGROUND_SETTINGS) {
                     Card(
                         modifier = Modifier
                             .padding(top = 12.dp)
                             .fillMaxWidth(),
                     ) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            SwitchPreference(
-                                title = stringResource(id = R.string.settings_enable_blur),
-                                summary = stringResource(id = R.string.settings_enable_blur_summary),
-                                startAction = {
-                                    Icon(
-                                        Icons.Rounded.BlurOn,
-                                        modifier = Modifier.padding(end = 6.dp),
-                                        contentDescription = stringResource(id = R.string.settings_enable_blur),
-                                        tint = colorScheme.onBackground
-                                    )
-                                },
-                                checked = uiState.enableBlur,
-                                onCheckedChange = {
-                                    actions.onSetEnableBlur(it)
+                        val hasBackground = hasAppBackground(uiState.appBackgroundPath)
+                        ArrowPreference(
+                            title = stringResource(id = R.string.settings_custom_background),
+                            summary = stringResource(
+                                id = if (hasBackground) R.string.settings_custom_background_summary_on
+                                else R.string.settings_custom_background_summary_off
+                            ),
+                            startAction = {
+                                Icon(
+                                    Icons.Rounded.Image,
+                                    modifier = Modifier.padding(end = 6.dp),
+                                    contentDescription = stringResource(id = R.string.settings_custom_background),
+                                    tint = colorScheme.onBackground
+                                )
+                            },
+                            endActions = {
+                                Text(
+                                    text = stringResource(
+                                        id = if (hasBackground) R.string.settings_custom_background_change
+                                        else R.string.settings_custom_background_pick
+                                    ),
+                                    color = colorScheme.primary,
+                                )
+                            },
+                            onClick = { actions.onPickAppBackground() },
+                        )
+                        AnimatedVisibility(visible = hasBackground) {
+                            Column {
+                                var dimValue by remember(uiState.appBackgroundDim) {
+                                    mutableFloatStateOf(uiState.appBackgroundDim)
                                 }
-                            )
+                                ArrowPreference(
+                                    title = stringResource(id = R.string.settings_custom_background_dim),
+                                    summary = stringResource(id = R.string.settings_custom_background_dim_summary),
+                                    startAction = {
+                                        Icon(
+                                            Icons.Rounded.Opacity,
+                                            modifier = Modifier.padding(end = 6.dp),
+                                            contentDescription = stringResource(id = R.string.settings_custom_background_dim),
+                                            tint = colorScheme.onBackground
+                                        )
+                                    },
+                                    endActions = {
+                                        Text(
+                                            text = "${(dimValue * 100).roundToInt()}%",
+                                            color = colorScheme.onSurfaceVariantActions,
+                                        )
+                                    },
+                                    bottomAction = {
+                                        Slider(
+                                            value = dimValue,
+                                            onValueChange = { dimValue = it },
+                                            onValueChangeFinished = { actions.onSetAppBackgroundDim(dimValue) },
+                                            valueRange = 0f..0.95f,
+                                        )
+                                    },
+                                )
+                                var cardDimValue by remember(uiState.appCardDim, uiState.appBackgroundDim) {
+                                    mutableFloatStateOf(
+                                        if (uiState.appCardDim >= 0f) uiState.appCardDim
+                                        else uiState.appBackgroundDim
+                                    )
+                                }
+                                ArrowPreference(
+                                    title = stringResource(id = R.string.settings_custom_background_card_dim),
+                                    summary = stringResource(id = R.string.settings_custom_background_card_dim_summary),
+                                    startAction = {
+                                        Icon(
+                                            Icons.Rounded.DesignServices,
+                                            modifier = Modifier.padding(end = 6.dp),
+                                            contentDescription = stringResource(id = R.string.settings_custom_background_card_dim),
+                                            tint = colorScheme.onBackground
+                                        )
+                                    },
+                                    endActions = {
+                                        Text(
+                                            text = "${(cardDimValue * 100).roundToInt()}%",
+                                            color = colorScheme.onSurfaceVariantActions,
+                                        )
+                                    },
+                                    bottomAction = {
+                                        Slider(
+                                            value = cardDimValue,
+                                            onValueChange = { cardDimValue = it },
+                                            onValueChangeFinished = { actions.onSetAppCardDim(cardDimValue) },
+                                            valueRange = 0f..0.95f,
+                                        )
+                                    },
+                                )
+                                ArrowPreference(
+                                    title = stringResource(id = R.string.settings_custom_background_remove),
+                                    summary = stringResource(id = R.string.settings_custom_background_remove_summary),
+                                    startAction = {
+                                        Icon(
+                                            Icons.Rounded.Delete,
+                                            modifier = Modifier.padding(end = 6.dp),
+                                            contentDescription = stringResource(id = R.string.settings_custom_background_remove),
+                                            tint = colorScheme.onBackground
+                                        )
+                                    },
+                                    onClick = { actions.onClearAppBackground() },
+                                )
+                            }
                         }
-                        SwitchPreference(
+                    }
+                    }
+
+                    Card(
+                        modifier = Modifier
+                            .padding(top = 12.dp)
+                            .fillMaxWidth(),
+                    ) {
+                                                SwitchPreference(
                             title = stringResource(id = R.string.settings_floating_bottom_bar),
                             summary = stringResource(id = R.string.settings_floating_bottom_bar_summary),
                             startAction = {

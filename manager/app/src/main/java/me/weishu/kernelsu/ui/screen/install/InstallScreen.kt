@@ -271,9 +271,9 @@ fun InstallScreen() {
                 // The download flow extracts the KMI itself; no manual
                 // selection needed.
                 is InstallMethod.DownloadFile -> false
-                // 其余流程（本地镜像 / 直接安装）只在无法确定设备 KMI 时才弹窗：
-                // KMI 能自动解析时必须自动选对，绝不把「猜」的机会留给用户。
-                else -> isKmiUnknown
+                // 本地镜像 / 直接安装：未 root 时本地推断出的 KMI 只作为弹窗预选高亮，
+                // 一律弹窗让用户确认，避免「猜」出的 KMI 被静默采用。
+                else -> isKmiUnknown || !rootAvailable
             }
             val needsKmi = !isLkmSelected && isKmiUnresolved
             when {

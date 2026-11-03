@@ -64,7 +64,17 @@ pub fn get_common_script_envs(module_id: Option<&str>) -> Vec<(&'static str, Str
     let mut envs = vec![
         ("ASH_STANDALONE", "1".to_string()),
         ("KSU", "true".to_string()),
-        ("KSU_KERNEL_VER_CODE", ksucalls::get_version().to_string()),
+        // MRSU: 内核侧 kernel/Kbuild 在无 .git 环境下会把 KSU_VERSION 编成占位值 16，
+        // 导致依赖版本门的模块（如 Zygisk Next 要求 KernelSU >= 10940）被误拒。
+        // 内核版本码异常偏小时，改用 ksud 自身的版本码上报给安装脚本。
+        ("KSU_KERNEL_VER_CODE", {
+            let kv = ksucalls::get_version();
+            if kv < 10940 {
+                defs::VERSION_CODE.to_string()
+            } else {
+                kv.to_string()
+            }
+        }),
         ("KSU_VER_CODE", defs::VERSION_CODE.to_string()),
         ("KSU_VER", defs::VERSION_NAME.to_string()),
         ("KSU_UAPI_VER", ksucalls::uapi_version().to_string()),
@@ -102,11 +112,19 @@ fn exec_install_script(module_file: &str, is_metamodule: bool, module_id: &str) 
     let install_script =
         metamodule::get_install_script(is_metamodule, INSTALLER_CONTENT, INSTALL_MODULE_SCRIPT)?;
 
+    // Installer scripts must run in boot mode (no recovery partitions to mount),
+    // and their temp dir must live on a path writable by the app process domain.
+    let install_tmp = "/data/adb/.ksu_install_tmp";
+    let _ = std::fs::create_dir_all(install_tmp);
+
     let result = Command::new(assets::BUSYBOX_PATH)
         .args(["sh", "-c", &install_script])
         .envs(get_common_script_envs(Some(module_id)))
         .env("OUTFD", "1")
         .env("ZIPFILE", realpath)
+        .env("BOOTMODE", "true")
+        .env("KSU_TMPDIR", install_tmp)
+        .env("KSU_INSTALL_DIAG", "/data/adb/ksu_install_diag.log")
         .status()?;
     ensure!(result.success(), "Failed to install module script");
     Ok(())

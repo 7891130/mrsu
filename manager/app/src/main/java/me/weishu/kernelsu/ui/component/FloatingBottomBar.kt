@@ -5,7 +5,10 @@ package me.weishu.kernelsu.ui.component
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.EaseOut
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +18,7 @@ import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
@@ -30,6 +34,7 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -38,10 +43,14 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur as uiBlur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.input.key.Key
@@ -49,8 +58,11 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -59,10 +71,13 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.util.fastCoerceIn
 import androidx.compose.ui.util.lerp
 import kotlinx.coroutines.launch
+import me.weishu.kernelsu.ui.component.AppBackgroundInfo
 import me.weishu.kernelsu.ui.component.liquid.InnerShadow
 import me.weishu.kernelsu.ui.component.liquid.innerShadow
 import me.weishu.kernelsu.ui.component.liquid.lens
@@ -217,7 +232,14 @@ fun FloatingBottomBar(
     val accentColor = MiuixTheme.colorScheme.primary
     val tabContentColor = MiuixTheme.colorScheme.onSurface
     val surfaceContainer = MiuixTheme.colorScheme.surfaceContainer
-    val containerColor = if (isBlurEnabled) surfaceContainer.copy(0.4f) else surfaceContainer
+    // With a custom wallpaper the container token is a pure black veil, which would turn the
+    // glass into a black slab. Keep it mostly clear there so the blurred wallpaper shows through.
+    val appBackgroundInfo = LocalAppBackgroundInfo.current
+    val containerColor = when {
+        !isBlurEnabled -> surfaceContainer
+        appBackgroundInfo != null -> Color.Black.copy(alpha = (appBackgroundInfo.dim * 0.12f).coerceIn(0f, 0.16f))
+        else -> surfaceContainer.copy(0.4f)
+    }
 
     val tabsBackdrop = rememberLayerBackdrop()
     val density = LocalDensity.current
@@ -226,6 +248,7 @@ fun FloatingBottomBar(
 
     var tabWidthPx by remember { mutableFloatStateOf(0f) }
     var totalWidthPx by remember { mutableFloatStateOf(0f) }
+    var barWindowOffset by remember { mutableStateOf(IntOffset.Zero) }
 
     val offsetAnimation = remember { Animatable(0f) }
     val rubberBandPx = with(density) { 4.dp.toPx() }
@@ -331,14 +354,80 @@ fun FloatingBottomBar(
 
     val combinedBackdrop = rememberCombinedBackdrop(backdrop, tabsBackdrop)
 
+    val windowSize = LocalWindowInfo.current.containerSize
     Box(
         modifier = modifier.width(IntrinsicSize.Min),
         contentAlignment = Alignment.CenterStart
     ) {
+        // Liquid glass, painted on our own: take the wallpaper pixels that sit under the bar,
+        // blur them and lay the container tint on top. Sampling a layer backdrop produced an
+        // all black bar because that layer never received the wallpaper.
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .graphicsLayer { translationX = panelOffset }
+                .then(if (isBlurEnabled) Modifier.clip(pillShape) else Modifier)
+        ) {
+            val bgInfo = appBackgroundInfo
+            if (isBlurEnabled && bgInfo != null) {
+                // Downscale first: upscaling the tiny copy gives a much softer, glassier blur
+                // than a blur shader alone, and it keeps the per frame cost low.
+                val glassBitmap = remember(bgInfo.bitmap) {
+                    val src = bgInfo.bitmap.asAndroidBitmap()
+                    val tw = (src.width / 16).coerceAtLeast(1)
+                    val th = (src.height / 16).coerceAtLeast(1)
+                    android.graphics.Bitmap
+                        .createScaledBitmap(src, tw, th, true)
+                        .asImageBitmap()
+                }
+                Canvas(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .uiBlur(24.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Unbounded)
+                ) {
+                    val bmp = glassBitmap
+                    val bmpW = bmp.width.toFloat()
+                    val bmpH = bmp.height.toFloat()
+                    val screenW = windowSize.width.toFloat()
+                    val screenH = windowSize.height.toFloat()
+                    if (bmpW > 0f && bmpH > 0f && screenW > 0f && screenH > 0f) {
+                        val coverScale = maxOf(screenW / bmpW, screenH / bmpH)
+                        val dstW = bmpW * coverScale
+                        val dstH = bmpH * coverScale
+                        val left = (screenW - dstW) / 2f
+                        val top = (screenH - dstH) / 2f
+                        translate(
+                            left = -barWindowOffset.x + left,
+                            top = -barWindowOffset.y + top,
+                        ) {
+                            drawImage(
+                                image = bmp,
+                                dstOffset = IntOffset.Zero,
+                                dstSize = IntSize(dstW.roundToInt(), dstH.roundToInt()),
+                            )
+                        }
+                    }
+                }
+                Box(modifier = Modifier.fillMaxSize().background(containerColor))
+                // Faint lift so the glass still reads as glass on a dark wallpaper.
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.White.copy(alpha = if (isInDark) 0.14f else 0.16f))
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .border(1.dp, Color.White.copy(alpha = 0.18f), pillShape)
+                )
+            }
+        }
         Row(
             Modifier
                 .onGloballyPositioned { coords ->
                     totalWidthPx = coords.size.width.toFloat()
+                    val pos = coords.positionInWindow()
+                    barWindowOffset = IntOffset(pos.x.roundToInt(), pos.y.roundToInt())
                     val contentWidthPx = totalWidthPx - with(density) { 8.dp.toPx() }
                     tabWidthPx = (contentWidthPx / tabsCount).coerceAtLeast(0f)
                 }
@@ -354,27 +443,7 @@ fun FloatingBottomBar(
                 )
                 .then(
                     if (isBlurEnabled) {
-                        Modifier.drawBackdrop(
-                            backdrop = backdrop,
-                            shape = { pillShape },
-                            effects = {
-                                padding = maxOf(padding, 40.dp.toPx())
-                                vibrancy()
-                                blur(4.dp.toPx(), 4.dp.toPx())
-                                lens(
-                                    refractionHeight = 24.dp.toPx(),
-                                    refractionAmount = 24.dp.toPx(),
-                                )
-                            },
-                            highlight = { baseHighlight.value.copy(alpha = 0.75f) },
-                            layerBlock = {
-                                val width = size.width.coerceAtLeast(1f)
-                                val s = lerp(1f, 1f + 16.dp.toPx() / width, dampedDragAnimation.pressProgress)
-                                scaleX = s
-                                scaleY = s
-                            },
-                            onDrawSurface = { drawRect(containerColor) },
-                        )
+                        Modifier.clip(pillShape)
                     } else {
                         Modifier.background(containerColor, pillShape)
                     }
@@ -394,41 +463,6 @@ fun FloatingBottomBar(
             }
         }
 
-        if (isBlurEnabled) {
-            CompositionLocalProvider(
-                LocalFloatingBottomBarTabScale provides {
-                    lerp(1f, 1.2f, dampedDragAnimation.pressProgress)
-                },
-                LocalContentColor provides accentColor,
-            ) {
-                Row(
-                    Modifier
-                        .clearAndSetSemantics {}
-                        .alpha(0f)
-                        .layerBackdrop(tabsBackdrop)
-                        .graphicsLayer { translationX = panelOffset }
-                        .drawBackdrop(
-                            backdrop = backdrop,
-                            shape = { pillShape },
-                            effects = {
-                                vibrancy()
-                                blur(4.dp.toPx(), 4.dp.toPx())
-                                lens(
-                                    refractionHeight = 24.dp.toPx(),
-                                    refractionAmount = 24.dp.toPx(),
-                                )
-                            },
-                            onDrawSurface = { drawRect(containerColor) },
-                        )
-                        .then(interactiveHighlight.modifier)
-                        .height(56.dp)
-                        .padding(horizontal = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    content = { content(::activateTab) }
-                )
-            }
-        }
-
         if (tabWidthPx > 0f) {
             val tabWidthDp = with(density) { tabWidthPx.toDp() }
             if (isBlurEnabled) {
@@ -439,35 +473,15 @@ fun FloatingBottomBar(
                             val progressOffset = dampedDragAnimation.value * tabWidthPx
                             translationX = if (isLtr) progressOffset + panelOffset else -progressOffset + panelOffset
                         }
-                        .drawBackdrop(
-                            backdrop = combinedBackdrop,
-                            shape = { pillShape },
-                            effects = {
-                                val progress = dampedDragAnimation.pressProgress
-                                lens(
-                                    refractionHeight = 10.dp.toPx() * progress,
-                                    refractionAmount = 14.dp.toPx() * progress,
-                                    depthEffect = true,
-                                    chromaticAberration = 0.5f,
-                                )
-                            },
-                            highlight = { pillHighlight.value.copy(alpha = dampedDragAnimation.pressProgress) },
-                            layerBlock = {
-                                scaleX = dampedDragAnimation.scaleX
-                                scaleY = dampedDragAnimation.scaleY
-                                val velocity = dampedDragAnimation.velocity / 10f
-                                scaleX /= 1f - (velocity * 0.75f).fastCoerceIn(-0.2f, 0.2f)
-                                scaleY *= 1f - (velocity * 0.25f).fastCoerceIn(-0.2f, 0.2f)
-                            },
-                            onDrawSurface = {
-                                val progress = dampedDragAnimation.pressProgress
-                                drawRect(
-                                    color = if (!isInDark) Color.Black.copy(alpha = 0.1f) else Color.White.copy(alpha = 0.1f),
-                                    alpha = 1f - progress,
-                                )
-                                drawRect(Color.Black.copy(alpha = 0.03f * progress))
-                            },
+                        .clip(pillShape)
+                        .background(
+                            color = if (!isInDark) Color.Black.copy(alpha = 0.10f) else Color.White.copy(alpha = 0.10f),
+                            shape = pillShape,
                         )
+                        .graphicsLayer {
+                            scaleX = dampedDragAnimation.scaleX
+                            scaleY = dampedDragAnimation.scaleY
+                        }
                         .innerShadow(shape = pillShape) {
                             InnerShadow(
                                 radius = 8.dp * dampedDragAnimation.pressProgress,

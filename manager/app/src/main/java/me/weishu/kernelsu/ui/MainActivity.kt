@@ -1,4 +1,4 @@
-package me.weishu.kernelsu.ui
+﻿package me.weishu.kernelsu.ui
 
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -8,6 +8,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.displayCutout
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.systemBars
@@ -44,6 +47,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -57,6 +61,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import me.weishu.kernelsu.Natives
+import me.weishu.kernelsu.ui.component.AppBackground
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import me.weishu.kernelsu.ui.component.LocalAppBackgroundInfo
+import me.weishu.kernelsu.ui.component.PageFadeTransition
 import me.weishu.kernelsu.ui.component.bottombar.BottomBar
 import me.weishu.kernelsu.ui.component.bottombar.MainPagerState
 import me.weishu.kernelsu.ui.component.bottombar.NavigationBadgeState
@@ -70,6 +81,7 @@ import me.weishu.kernelsu.ui.navigation3.Route
 import me.weishu.kernelsu.ui.navigation3.rememberNavigator
 import me.weishu.kernelsu.ui.screen.about.AboutScreen
 import me.weishu.kernelsu.ui.screen.appprofile.AppProfileScreen
+import me.weishu.kernelsu.ui.screen.colorpalette.BackgroundCropScreen
 import me.weishu.kernelsu.ui.screen.colorpalette.ColorPaletteScreen
 import me.weishu.kernelsu.ui.screen.executemoduleaction.ExecuteModuleActionScreen
 import me.weishu.kernelsu.ui.screen.flash.FlashScreen
@@ -92,6 +104,7 @@ import me.weishu.kernelsu.ui.theme.LocalEnableFloatingBottomBarBlur
 import me.weishu.kernelsu.ui.theme.LocalEnableNavigationBadge
 import me.weishu.kernelsu.ui.theme.LocalModuleDescriptionMaxLines
 import me.weishu.kernelsu.ui.util.getSuperuserCount
+import me.weishu.kernelsu.ui.util.hasAppBackground
 import me.weishu.kernelsu.ui.util.install
 import me.weishu.kernelsu.ui.util.rememberBlurBackdrop
 import me.weishu.kernelsu.ui.util.rememberContentReady
@@ -142,16 +155,22 @@ class MainActivity : ComponentActivity() {
             val uiMode = uiState.uiMode
             val darkMode = appSettings.colorMode.isDark || (appSettings.colorMode.isSystem && isSystemInDarkTheme())
 
-            DisposableEffect(darkMode) {
+            val backgroundPath = uiState.appBackgroundPath
+            val hasBackground = hasAppBackground(backgroundPath)
+            // A custom background darkens the whole window, so the system bar icons must use
+            // their light variant even when the app itself runs in light mode.
+            val darkBarIcons = darkMode || (hasBackground && uiState.appBackgroundDim >= 0.45f)
+
+            DisposableEffect(darkBarIcons) {
                 enableEdgeToEdge(
                     statusBarStyle = SystemBarStyle.auto(
                         android.graphics.Color.TRANSPARENT,
                         android.graphics.Color.TRANSPARENT
-                    ) { darkMode },
+                    ) { darkBarIcons },
                     navigationBarStyle = SystemBarStyle.auto(
                         android.graphics.Color.TRANSPARENT,
                         android.graphics.Color.TRANSPARENT
-                    ) { darkMode },
+                    ) { darkBarIcons },
                 )
                 window.isNavigationBarContrastEnforced = false
                 onDispose { }
@@ -174,8 +193,25 @@ class MainActivity : ComponentActivity() {
                 LocalModuleDescriptionMaxLines provides uiState.moduleDescriptionMaxLines,
                 LocalUiMode provides uiMode,
             ) {
-                KernelSUTheme(appSettings = appSettings, uiMode = uiMode) {
+                KernelSUTheme(
+                    appSettings = appSettings,
+                    uiMode = uiMode,
+                    backgroundDim = if (hasBackground) uiState.appBackgroundDim else null,
+                    // appCardDim < 0 means "follow the background veil" (legacy behaviour).
+                    cardDim = if (hasBackground && uiState.appCardDim >= 0f) {
+                        uiState.appCardDim
+                    } else {
+                        null
+                    },
+                ) {
+                  AppBackground(
+                      path = if (hasBackground) backgroundPath else "",
+                      dim = uiState.appBackgroundDim,
+                  ) {
                     IntentDispatcher(intentChannel = intentChannel)
+                    // The wallpaper is painted once by AppBackground on the window layer, so pages
+                    // stay transparent and never paint their own copy of the picture.
+                    val pageBackground: @Composable (content: @Composable () -> Unit) -> Unit = { inner -> inner() }
                     val swipeDismiss = if (uiState.enableSwipeDismiss) {
                         if (LocalLayoutDirection.current == androidx.compose.ui.unit.LayoutDirection.Rtl) {
                             NavSwipeDirection.RightToLeft
@@ -203,7 +239,13 @@ class MainActivity : ComponentActivity() {
                     val navDisplay = @Composable {
                         NavDisplay(
                             backStack = navigator.backStack,
-                            effects = NavDisplayEffects(cornerClipRadius = rememberNavSystemCornerRadius()),
+                            transition = PageFadeTransition,
+                            effects = NavDisplayEffects(
+                                cornerClipRadius = rememberNavSystemCornerRadius(),
+                                // The pages fade into each other, a dim on top of that would only
+                                // make the screen flash dark in the middle of the transition.
+                                dimAmount = 0f,
+                            ),
                             onBack = {
                                 when (val top = navigator.current()) {
                                     is Route.TemplateEditor -> {
@@ -217,53 +259,61 @@ class MainActivity : ComponentActivity() {
                                     else -> navigator.pop()
                                 }
                             }) {
-                            entry<Route.Main>(swipeDismiss = swipeDismiss) { mainScreenEntry() }
-                            entry<Route.About>(swipeDismiss = swipeDismiss) { AboutScreen() }
-                            entry<Route.Sulog>(swipeDismiss = swipeDismiss) { SulogScreen() }
-                            entry<Route.ColorPalette>(swipeDismiss = swipeDismiss) { ColorPaletteScreen() }
-                            entry<Route.AppProfileTemplate>(swipeDismiss = swipeDismiss) { AppProfileTemplateScreen() }
-                            entry<Route.TemplateEditor>(swipeDismiss = swipeDismiss) { key -> TemplateEditorScreen(key.template, key.readOnly) }
-                            entry<Route.AppProfile>(swipeDismiss = swipeDismiss) { key -> AppProfileScreen(key.uid) }
-                            entry<Route.ModuleRepo>(swipeDismiss = swipeDismiss) { ModuleRepoScreen() }
-                            entry<Route.ModuleRepoDetail>(swipeDismiss = swipeDismiss) { key -> ModuleRepoDetailScreen(key.module) }
-                            entry<Route.Install>(swipeDismiss = swipeDismiss) { InstallScreen() }
+                            entry<Route.Main>(swipeDismiss = swipeDismiss) { pageBackground { mainScreenEntry() } }
+                            entry<Route.About>(swipeDismiss = swipeDismiss) { pageBackground { AboutScreen() } }
+                            entry<Route.Sulog>(swipeDismiss = swipeDismiss) { pageBackground { SulogScreen() } }
+                            entry<Route.ColorPalette>(swipeDismiss = swipeDismiss) { pageBackground { ColorPaletteScreen() } }
+                            entry<Route.BackgroundCrop>(swipeDismiss = swipeDismiss) { key -> pageBackground { BackgroundCropScreen(key.uri) } }
+                            entry<Route.AppProfileTemplate>(swipeDismiss = swipeDismiss) { pageBackground { AppProfileTemplateScreen() } }
+                            entry<Route.TemplateEditor>(swipeDismiss = swipeDismiss) { key -> pageBackground { TemplateEditorScreen(key.template, key.readOnly) } }
+                            entry<Route.AppProfile>(swipeDismiss = swipeDismiss) { key -> pageBackground { AppProfileScreen(key.uid) } }
+                            entry<Route.ModuleRepo>(swipeDismiss = swipeDismiss) { pageBackground { ModuleRepoScreen() } }
+                            entry<Route.ModuleRepoDetail>(swipeDismiss = swipeDismiss) { key -> pageBackground { ModuleRepoDetailScreen(key.module) } }
+                            entry<Route.Install>(swipeDismiss = swipeDismiss) { pageBackground { InstallScreen() } }
                             entry<Route.Flash>(swipeDismiss = if (flashBackEnabled) swipeDismiss else NavSwipeDirection.None) { key ->
-                                FlashScreen(
-                                    key.flashIt,
-                                    onBackEnabledChange = { enabled ->
-                                        if (navigator.current() == key) flashBackEnabled = enabled
-                                    },
-                                )
+                                pageBackground {
+                                    FlashScreen(
+                                        key.flashIt,
+                                        onBackEnabledChange = { enabled ->
+                                            if (navigator.current() == key) flashBackEnabled = enabled
+                                        },
+                                    )
+                                }
                             }
                             entry<Route.ExecuteModuleAction>(swipeDismiss = swipeDismiss) { key ->
-                                ExecuteModuleActionScreen(
-                                    key.moduleId,
-                                    key.fromShortcut
-                                )
+                                pageBackground {
+                                    ExecuteModuleActionScreen(
+                                        key.moduleId,
+                                        key.fromShortcut
+                                    )
+                                }
                             }
                             entry<Route.ScriptRun>(swipeDismiss = scriptRunSwipeDismiss) { key ->
-                                ScriptRunScreen(
-                                    key.arg,
-                                    onBackEnabledChange = { enabled ->
-                                        if (navigator.current() == key) scriptRunBackEnabled = enabled
-                                    },
-                                )
+                                pageBackground {
+                                    ScriptRunScreen(
+                                        key.arg,
+                                        onBackEnabledChange = { enabled ->
+                                            if (navigator.current() == key) scriptRunBackEnabled = enabled
+                                        },
+                                    )
+                                }
                             }
-                            entry<Route.Home>(swipeDismiss = swipeDismiss) { mainScreenEntry() }
-                            entry<Route.SuperUser>(swipeDismiss = swipeDismiss) { mainScreenEntry() }
-                            entry<Route.Module>(swipeDismiss = swipeDismiss) { mainScreenEntry() }
-                            entry<Route.Settings>(swipeDismiss = swipeDismiss) { mainScreenEntry() }
+                            entry<Route.Home>(swipeDismiss = swipeDismiss) { pageBackground { mainScreenEntry() } }
+                            entry<Route.SuperUser>(swipeDismiss = swipeDismiss) { pageBackground { mainScreenEntry() } }
+                            entry<Route.Module>(swipeDismiss = swipeDismiss) { pageBackground { mainScreenEntry() } }
+                            entry<Route.Settings>(swipeDismiss = swipeDismiss) { pageBackground { mainScreenEntry() } }
                         }
                     }
 
                     when (uiMode) {
                         UiMode.Material -> androidx.compose.material3.Scaffold(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainer
+                            containerColor = Color.Transparent
                         ) { navDisplay() }
 
                         UiMode.Miuix -> Scaffold { navDisplay() }
                     }
                     SideEffect { contentReady = true }
+                  }
                 }
             }
         }
@@ -363,10 +413,12 @@ fun MainScreen(
     }
     val blurBackdrop = rememberBlurBackdrop(enableBlur)
 
-    val backdrop = rememberLayerBackdrop {
-        drawRect(surfaceColor)
-        drawContent()
-    }
+    // The liquid glass bar blurs whatever this layer recorded. Custom wallpapers are painted on
+    // the window layer (outside this one) and the pages stay transparent, so the layer would be
+    // empty and the glass would sample nothing but black. The wallpaper is therefore painted once
+    // more *inside* the layer (see pagerContent) purely as blur input.
+    val glassLayerEnabled = enableFloatingBottomBar && enableFloatingBottomBarBlur
+    val backdrop = rememberLayerBackdrop()
 
     val settledPage = mainPagerState.pagerState.settledPage
     LaunchedEffect(settledPage) {
@@ -384,16 +436,27 @@ fun MainScreen(
         LocalMainPagerState provides mainPagerState
     ) {
         val contentReady = rememberContentReady()
+        val appBackgroundInfo = LocalAppBackgroundInfo.current
+        val glassBottomBar = @Composable {
+            Box(modifier = Modifier.fillMaxWidth()) {
+                BottomBar(
+                    blurBackdrop = blurBackdrop,
+                    backdrop = backdrop,
+                    navigationBadge = navigationBadge,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            }
+        }
+
         val pagerContent = @Composable { bottomInnerPadding: Dp ->
-            Box(modifier = if (blurBackdrop != null) Modifier.layerBackdrop(blurBackdrop) else Modifier) {
+            Box(modifier = Modifier) {
                 HorizontalPager(
                     modifier = Modifier
                         .pagerGestureOverride(
                             pagerState = mainPagerState.pagerState,
                             mode = pagerMode,
                             enabled = userScrollEnabled,
-                        )
-                        .then(if (enableFloatingBottomBar && enableFloatingBottomBarBlur) Modifier.layerBackdrop(backdrop) else Modifier),
+                        ),
                     state = mainPagerState.pagerState,
                     beyondViewportPageCount = if (contentReady) 3 else 0,
                     overscrollEffect = null,
@@ -457,28 +520,17 @@ fun MainScreen(
                 }
             }
         } else {
-            val bottomBar = @Composable {
-                Box(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    BottomBar(
-                        blurBackdrop = blurBackdrop,
-                        backdrop = backdrop,
-                        navigationBadge = navigationBadge,
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                    )
-                }
-            }
-
+            val bottomBar = @Composable { glassBottomBar() }
             when (uiMode) {
                 UiMode.Material -> androidx.compose.material3.Scaffold(
                     bottomBar = bottomBar,
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer
                 ) { innerPadding ->
                     pagerContent(innerPadding.calculateBottomPadding())
                 }
 
-                UiMode.Miuix -> Scaffold(bottomBar = bottomBar) { innerPadding ->
+                UiMode.Miuix -> Scaffold(
+                    bottomBar = bottomBar,
+                ) { innerPadding ->
                     pagerContent(innerPadding.calculateBottomPadding())
                 }
             }

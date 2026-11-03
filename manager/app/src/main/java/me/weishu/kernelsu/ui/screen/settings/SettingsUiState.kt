@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import com.materialkolor.PaletteStyle
 import com.materialkolor.dynamiccolor.ColorSpec
 import me.weishu.kernelsu.ui.UiMode
+import me.weishu.kernelsu.ui.util.BUILTIN_BACKGROUND_PATH
 
 @Immutable
 data class SettingsUiState(
@@ -19,12 +20,15 @@ data class SettingsUiState(
     val enableSwipeDismiss: Boolean = true,
     val pagerInterceptionMode: Int = 1,
     val enableBlur: Boolean = true,
-    val enableFloatingBottomBar: Boolean = false,
-    val enableFloatingBottomBarBlur: Boolean = false,
+    val enableFloatingBottomBar: Boolean = true,
+    val enableFloatingBottomBarBlur: Boolean = true,
     val enableNavigationBadge: Boolean = true,
     val pageScale: Float = 1.0f,
     val moduleDescriptionMaxLines: Int = 4,
     val enableWebDebugging: Boolean = false,
+    val appBackgroundPath: String = BUILTIN_BACKGROUND_PATH,
+    val appBackgroundDim: Float = 0.30f,
+    val appCardDim: Float = 0.29f,
 
     // Su Compat
     val suCompatStatus: String = "",

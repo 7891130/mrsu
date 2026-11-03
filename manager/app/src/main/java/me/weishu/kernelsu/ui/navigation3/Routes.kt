@@ -51,6 +51,11 @@ sealed interface Route : NavKey, Parcelable {
     @Serializable
     data object ColorPalette : Route
 
+    /** Crop screen shown right after the user picks a picture for the app background. */
+    @Parcelize
+    @Serializable
+    data class BackgroundCrop(val uri: String) : Route
+
     @Parcelize
     @Serializable
     data object AppProfileTemplate : Route

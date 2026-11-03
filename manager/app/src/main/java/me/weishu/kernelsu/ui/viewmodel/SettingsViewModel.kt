@@ -18,6 +18,9 @@ import me.weishu.kernelsu.data.repository.SettingsRepositoryImpl
 import me.weishu.kernelsu.ksuApp
 import me.weishu.kernelsu.ui.screen.settings.SettingsUiState
 import me.weishu.kernelsu.ui.theme.ColorMode
+import me.weishu.kernelsu.ui.util.clearAppBackground as removeBackgroundFile
+import me.weishu.kernelsu.ui.util.importAppBackground
+import me.weishu.kernelsu.ui.util.saveAppBackgroundBitmap
 
 class SettingsViewModel(
     private val repo: SettingsRepository = SettingsRepositoryImpl()
@@ -49,6 +52,9 @@ class SettingsViewModel(
             val enableWebDebugging = repo.enableWebDebugging
             val colorStyle = repo.colorStyle
             val colorSpec = repo.colorSpec
+            val appBackgroundPath = repo.appBackgroundPath
+            val appBackgroundDim = repo.appBackgroundDim
+            val appCardDim = repo.appCardDim
             val isLkmMode = repo.isLkmMode()
 
             // Async loading for natives/features
@@ -112,6 +118,9 @@ class SettingsViewModel(
                     enableWebDebugging = enableWebDebugging,
                     colorStyle = colorStyle,
                     colorSpec = colorSpec,
+                    appBackgroundPath = appBackgroundPath,
+                    appBackgroundDim = appBackgroundDim,
+                    appCardDim = appCardDim,
                     suCompatStatus = suCompatStatus,
                     suCompatMode = suCompatMode,
                     isSuEnabled = isSuEnabled,
@@ -262,6 +271,53 @@ class SettingsViewModel(
     fun setModuleDescriptionMaxLines(lines: Int) {
         repo.moduleDescriptionMaxLines = lines
         _uiState.update { it.copy(moduleDescriptionMaxLines = lines) }
+    }
+
+    fun setAppBackground(uri: android.net.Uri) {
+        viewModelScope.launch {
+            val path = importAppBackground(ksuApp, uri) ?: return@launch
+            val previous = repo.appBackgroundPath
+            repo.appBackgroundPath = path
+            if (previous.isNotBlank() && previous != path) removeBackgroundFile(previous)
+            _uiState.update { it.copy(appBackgroundPath = path) }
+        }
+    }
+
+    /** Persist a picture that the user already cropped to the screen aspect ratio. */
+    fun setAppBackgroundFromBitmap(bitmap: android.graphics.Bitmap) {
+        viewModelScope.launch {
+            val path = withContext(Dispatchers.IO) { saveAppBackgroundBitmap(bitmap) }
+            if (path == null) {
+                Toast.makeText(ksuApp, R.string.settings_custom_background_failed, Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+            val previous = repo.appBackgroundPath
+            repo.appBackgroundPath = path
+            if (previous.isNotBlank() && previous != path) removeBackgroundFile(previous)
+            _uiState.update { it.copy(appBackgroundPath = path) }
+        }
+    }
+
+    fun clearAppBackground() {
+        viewModelScope.launch {
+            val previous = repo.appBackgroundPath
+            repo.appBackgroundPath = ""
+            removeBackgroundFile(previous)
+            _uiState.update { it.copy(appBackgroundPath = "") }
+        }
+    }
+
+    fun setAppBackgroundDim(dim: Float) {
+        val value = dim.coerceIn(0f, 0.95f)
+        repo.appBackgroundDim = value
+        _uiState.update { it.copy(appBackgroundDim = value) }
+    }
+
+    /** Darkness of cards and other surface containers over the custom background. */
+    fun setAppCardDim(dim: Float) {
+        val value = dim.coerceIn(0f, 0.95f)
+        repo.appCardDim = value
+        _uiState.update { it.copy(appCardDim = value) }
     }
 
     fun setEnableWebDebugging(enabled: Boolean) {

@@ -4,7 +4,6 @@
         <domain includeSubdomains="true">127.0.0.1</domain>
         <domain includeSubdomains="true">0.0.0.0</domain>
         <domain includeSubdomains="true">::1</domain>
-        <!-- MRSU self-hosted update manifest (HTTP only) -->
-        <domain includeSubdomains="true">47.109.202.185</domain>
+        <!-- MRSU 更新清单走 HTTPS（mingri.xyz），无需明文放行 -->
     </domain-config>
 </network-security-config>

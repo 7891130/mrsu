@@ -134,6 +134,7 @@ fun HomePagerMiuix(
                         if (state.checkUpdateEnabled) {
                             UpdateCard(state = state, actions = actions)
                         }
+                        AnnouncementCard(state = state)
                         if (state.showManagerPrBuildWarning) {
                             WarningCard(stringResource(id = R.string.home_pr_build_warning), level = WarningLevel.Notice)
                         } else if (state.showKernelPrBuildWarning) {
@@ -669,3 +670,24 @@ private fun previewHomeScreenState(
     kernelUAPIVersion = 1,
     managerUAPIVersion = 1,
 )
+@Composable
+private fun AnnouncementCard(state: HomeUiState) {
+    val announcement = state.announcement ?: return
+    if (!announcement.isValid) return
+    val title = announcement.displayTitle
+    val summary = announcement.summary
+    val dialog = rememberConfirmDialog(onConfirm = {})
+    val message = if (summary.isBlank() || summary == title) "【公告】$title" else "【公告】$title · $summary"
+    WarningCard(
+        message = message,
+        level = if (announcement.level >= 2) WarningLevel.Error else WarningLevel.Notice,
+        onClick = {
+            dialog.showConfirm(
+                title = title.ifBlank { "公告" },
+                content = announcement.content.takeIf { it.isNotBlank() },
+                markdown = false,
+                confirm = "知道了",
+            )
+        },
+    )
+}

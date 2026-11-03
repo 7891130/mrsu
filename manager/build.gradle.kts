@@ -32,10 +32,16 @@ fun getVersionCode(): Int {
     if (!override.isNullOrBlank()) {
         return override.trim().toInt()
     }
-    val commitCount = runCatching { getGitCommitCount() }.getOrDefault(1)
-    return 33000 + commitCount
+    // MRSU: 发版时手动递增（1.0.0 -> 33015，1.0.1 -> 33016，1.0.2 -> 33017，1.0.3 -> 33018，1.0.4 -> 33019，1.0.5 -> 33020，1.0.6 -> 33021，1.0.7 -> 33022，1.0.8 -> 33023，1.0.9 -> 33024，1.0.9.1 -> 33025，1.0.9.2 -> 33026，1.0.9.3 -> 33032，1.0.9.4 -> 33033，1.0.9.5 -> 33034，1.0.9.6 -> 33035，1.0.9.7 -> 33036，1.0.9.8 -> 33037，1.0.9.9 -> 33038，1.0.9.9.1 -> 33039，1.1-beta -> 33040）
+    return 33040
 }
 
+// MRSU: 版本号改为语义化版本，不再跟随 git describe；
+// 可用 -PmrsuVersionName=x.y.z 显式指定。
 fun getVersionName(): String {
-    return getGitDescribe()
+    val override = providers.gradleProperty("mrsuVersionName").orNull
+    if (!override.isNullOrBlank()) {
+        return override.trim()
+    }
+    return "1.1-beta"
 }

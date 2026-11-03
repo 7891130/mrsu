@@ -43,9 +43,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import me.weishu.kernelsu.ui.component.LocalAppBackgroundInfo
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
@@ -68,12 +73,14 @@ import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
 import me.weishu.kernelsu.ui.component.SearchStatus
+import me.weishu.kernelsu.ui.theme.LocalAppColorScheme
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.InputField
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.Search
 import top.yukonga.miuix.kmp.icon.basic.SearchCleanup
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 
 /** Like `padding(top = …)` but reads [top] in the layout phase, so a frame-rate value relayouts instead of recomposing. */
@@ -117,7 +124,29 @@ fun SearchStatus.SearchPager(
     searchBarTopPadding: Dp = 12.dp,
     result: @Composable () -> Unit
 ) {
-    val searchStatus = this
+    // The Scaffold popup host re-provides Miuix's default (opaque) color scheme, so anything drawn
+    // here painted a black surface over the custom wallpaper. Re-apply the page palette, which is
+    // fully transparent while a wallpaper is active.
+    val pageScheme = LocalAppColorScheme.current
+    if (pageScheme == null) {
+        SearchPagerContent(this, onSearchStatusChange, defaultResult, expandBar, searchBarTopPadding, result)
+    } else {
+        MiuixTheme(colors = pageScheme, textStyles = MiuixTheme.textStyles) {
+            SearchPagerContent(this@SearchPager, onSearchStatusChange, defaultResult, expandBar, searchBarTopPadding, result)
+        }
+    }
+}
+
+@Composable
+private fun SearchPagerContent(
+    searchStatusArg: SearchStatus,
+    onSearchStatusChange: (SearchStatus) -> Unit,
+    defaultResult: @Composable () -> Unit,
+    expandBar: @Composable (SearchStatus, (SearchStatus) -> Unit, Dp) -> Unit,
+    searchBarTopPadding: Dp,
+    result: @Composable () -> Unit,
+) {
+    val searchStatus = searchStatusArg
     val systemBarsPadding = WindowInsets.systemBars.asPaddingValues().calculateTopPadding()
     val topPadding by animateDpAsState(
         targetValue = if (searchStatus.shouldExpand()) {
@@ -136,12 +165,40 @@ fun SearchStatus.SearchPager(
         label = "SearchPagerSurfaceAlpha"
     )
     val surfaceColor = colorScheme.surface
+    val appBackground = LocalAppBackgroundInfo.current
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .zIndex(5f)
-            .drawBehind { drawRect(surfaceColor.copy(alpha = surfaceAlpha)) }
+            .clipToBounds()
+            .drawBehind {
+                if (surfaceAlpha <= 0f) return@drawBehind
+                val info = appBackground
+                if (info == null) {
+                    drawRect(surfaceColor.copy(alpha = surfaceAlpha))
+                } else {
+                    // The Scaffold popup host where this pager lives has an opaque container of its
+                    // own, so the window wallpaper cannot show through here. Paint the very same
+                    // picture and veil again to keep the search screen looking like the page below.
+                    val bitmap = info.bitmap
+                    val scale = kotlin.math.max(size.width / bitmap.width.toFloat(), size.height / bitmap.height.toFloat())
+                    val width = bitmap.width * scale
+                    val height = bitmap.height * scale
+                    drawImage(
+                        image = bitmap,
+                        srcOffset = IntOffset.Zero,
+                        srcSize = IntSize(bitmap.width, bitmap.height),
+                        dstOffset = IntOffset(
+                            ((size.width - width) / 2f).toInt(),
+                            ((size.height - height) / 2f).toInt(),
+                        ),
+                        dstSize = IntSize(width.toInt(), height.toInt()),
+                        alpha = surfaceAlpha,
+                    )
+                    drawRect(Color.Black.copy(alpha = info.dim * surfaceAlpha))
+                }
+            }
             .semantics { onClick { false } }
             .then(
                 if (!searchStatus.isCollapsed()) {

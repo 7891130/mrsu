@@ -4,6 +4,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.runtime.staticCompositionLocalOf
+import top.yukonga.miuix.kmp.theme.Colors
 import com.materialkolor.PaletteStyle
 import com.materialkolor.dynamiccolor.ColorSpec
 import me.weishu.kernelsu.data.repository.SettingsRepository
@@ -104,17 +105,23 @@ object ThemeController {
 fun KernelSUTheme(
     appSettings: AppSettings = ThemeController.getAppSettings(),
     uiMode: UiMode = LocalUiMode.current,
+    backgroundDim: Float? = null,
+    cardDim: Float? = null,
     content: @Composable () -> Unit
 ) {
 
     when (uiMode) {
         UiMode.Miuix -> MiuixKernelSUTheme(
             appSettings = appSettings,
+            backgroundDim = backgroundDim,
+            cardDim = cardDim,
             content = content
         )
 
         UiMode.Material -> MaterialKernelSUTheme(
             appSettings = appSettings,
+            backgroundDim = backgroundDim,
+            cardDim = cardDim,
             content = content
         )
     }
@@ -131,6 +138,17 @@ fun isInDarkTheme(): Boolean {
 }
 
 val LocalColorMode = staticCompositionLocalOf { 0 }
+
+/**
+ * The color scheme the pages are using while a custom wallpaper is active, or null when the
+ * default opaque theme is in charge.
+ *
+ * Miuix re-provides its own default colors inside [top.yukonga.miuix.kmp.basic.Scaffold]'s
+ * popup host, so widgets rendered there (the search pager) can no longer read the translucent
+ * scheme through `MiuixTheme.colorScheme` and would paint an opaque surface over the picture.
+ * Reading this local instead keeps them on the same palette as the page below.
+ */
+val LocalAppColorScheme = staticCompositionLocalOf<Colors?> { null }
 
 val LocalEnableBlur = staticCompositionLocalOf { false }
 

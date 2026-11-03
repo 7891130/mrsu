@@ -54,6 +54,9 @@ class MainActivityViewModel(
             pagerInterceptionMode = settingRepo.pagerInterceptionMode,
             moduleDescriptionMaxLines = settingRepo.moduleDescriptionMaxLines,
             uiMode = UiMode.fromValue(settingRepo.uiMode),
+            appBackgroundPath = settingRepo.appBackgroundPath,
+            appBackgroundDim = settingRepo.appBackgroundDim,
+            appCardDim = settingRepo.appCardDim,
         )
     }
 
@@ -72,6 +75,9 @@ class MainActivityViewModel(
             "enable_swipe_dismiss",
             "pager_interception_mode",
             "ui_mode",
+            "app_background_path",
+            "app_background_dim",
+            "app_card_dim",
         )
     }
 }

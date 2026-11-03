@@ -2,6 +2,7 @@ package me.weishu.kernelsu.ui.screen.home
 
 import androidx.compose.runtime.Immutable
 import me.weishu.kernelsu.KernelVersion
+import me.weishu.kernelsu.ui.util.Announcement
 import me.weishu.kernelsu.ui.util.module.LatestVersionInfo
 
 @Immutable
@@ -22,6 +23,8 @@ data class HomeUiState(
     val isLateLoadMode: Boolean,
     val checkUpdateEnabled: Boolean,
     val latestVersionInfo: LatestVersionInfo,
+    /** 后台公告：为空表示当前无公告或拉取失败。 */
+    val announcement: Announcement? = null,
     val currentManagerVersionCode: Long,
     val systemInfo: SystemInfo,
 ) {

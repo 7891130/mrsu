@@ -58,13 +58,13 @@ internal suspend fun isDownloadAvailable(uri: Uri): Boolean = withContext(Dispat
  * {
  *   "versionCode": 33002,
  *   "versionName": "v1.0.1",
- *   "downloadUrl": "http://47.109.202.185/mrsu/MRSU_release.apk",
+ *   "downloadUrl": "https://mingri.xyz/mrsu/MRSU_1.0.9.3_33028-release.apk",
  *   "changelog": "..."
  * }
  *
  * versionCode 必须与发布 APK 的实际 versionCode 一致，否则会出现误报/漏报。
  */
-private const val UPDATE_MANIFEST_URL = "http://47.109.202.185/mrsu/latest.json"
+private const val UPDATE_MANIFEST_URL = "https://mingri.xyz/mrsu/latest.json"
 
 fun checkNewVersion(): LatestVersionInfo {
     if (!isNetworkAvailable(ksuApp)) return LatestVersionInfo()

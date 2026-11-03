@@ -13,6 +13,7 @@ import me.weishu.kernelsu.ksuApp
 import me.weishu.kernelsu.magica.BootCompletedReceiver
 import me.weishu.kernelsu.ui.UiMode
 import me.weishu.kernelsu.ui.screen.modulerepo.RepoSort
+import me.weishu.kernelsu.ui.util.BUILTIN_BACKGROUND_PATH
 import me.weishu.kernelsu.ui.util.execKsud
 import me.weishu.kernelsu.ui.util.getFeaturePersistValue
 import me.weishu.kernelsu.ui.util.getFeatureValue
@@ -70,6 +71,20 @@ class SettingsRepositoryImpl : SettingsRepository {
         get() = prefs.getString("color_spec", ColorSpec.SpecVersion.SPEC_2025.name) ?: ColorSpec.SpecVersion.SPEC_2025.name
         set(value) = prefs.edit { putString("color_spec", value) }
 
+    override var appBackgroundPath: String
+        // MRSU: a stock wallpaper ships in the APK; it is the value used until the user picks
+        // another picture. An explicit empty string still means "no background at all".
+        get() = prefs.getString("app_background_path", null) ?: BUILTIN_BACKGROUND_PATH
+        set(value) = prefs.edit { putString("app_background_path", value) }
+
+    override var appBackgroundDim: Float
+        get() = prefs.getFloat("app_background_dim", 0.30f)
+        set(value) = prefs.edit { putFloat("app_background_dim", value.coerceIn(0f, 0.95f)) }
+
+    override var appCardDim: Float
+        get() = prefs.getFloat("app_card_dim", 0.29f)
+        set(value) = prefs.edit { putFloat("app_card_dim", value.coerceIn(-1f, 0.95f)) }
+
     override var enablePredictiveBack: Boolean
         get() = prefs.getBoolean("enable_predictive_back", false)
         set(value) = prefs.edit { putBoolean("enable_predictive_back", value) }
@@ -87,11 +102,11 @@ class SettingsRepositoryImpl : SettingsRepository {
         set(value) = prefs.edit { putBoolean("enable_blur", value) }
 
     override var enableFloatingBottomBar: Boolean
-        get() = prefs.getBoolean("enable_floating_bottom_bar", false)
+        get() = prefs.getBoolean("enable_floating_bottom_bar", true)
         set(value) = prefs.edit { putBoolean("enable_floating_bottom_bar", value) }
 
     override var enableFloatingBottomBarBlur: Boolean
-        get() = prefs.getBoolean("enable_floating_bottom_bar_blur", false)
+        get() = prefs.getBoolean("enable_floating_bottom_bar_blur", true)
         set(value) = prefs.edit { putBoolean("enable_floating_bottom_bar_blur", value) }
 
     override var enableNavigationBadge: Boolean

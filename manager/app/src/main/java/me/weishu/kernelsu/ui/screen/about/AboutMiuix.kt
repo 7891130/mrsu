@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
@@ -39,11 +38,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInWindow
@@ -281,7 +280,7 @@ private fun AboutContent(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .size(100.dp)
-                    .clipToBounds()
+                    .clip(RoundedCornerShape(22.dp))
                     .graphicsLayer {
                         alpha = 1 - iconProgress
                         scaleX = 1 - (iconProgress * 0.05f)
@@ -295,23 +294,10 @@ private fun AboutContent(
                     },
             ) {
                 Image(
-                    modifier = Modifier
-                        .requiredSize(245.dp)
-                        .then(
-                            if (enableBlur) {
-                                Modifier.textureBlur(
-                                    backdrop = backdrop,
-                                    shape = RoundedCornerShape(0.dp),
-                                    blurRadius = 150f,
-                                    colors = BlurColors(blendColors = logoBlend),
-                                    contentBlendMode = ComposeBlendMode.DstIn,
-                                    enabled = true,
-                                )
-                            } else Modifier
-                        ),
+                    modifier = Modifier.fillMaxSize(),
                     painter = painterResource(id = R.drawable.ic_launcher_foreground),
-                    colorFilter = ColorFilter.tint(colorScheme.onBackground),
                     contentDescription = null,
+                    contentScale = ContentScale.Crop,
                 )
             }
             Text(
@@ -405,8 +391,7 @@ private fun AboutContent(
             item(key = "about") {
                 Column(
                     modifier = Modifier
-                        .fillParentMaxHeight()
-                        .padding(bottom = innerPadding.calculateBottomPadding() + 12.dp),
+                        .padding(bottom = innerPadding.calculateBottomPadding() + 76.dp),
                 ) {
                     Card(
                         modifier = Modifier
@@ -427,13 +412,81 @@ private fun AboutContent(
                             Color.Transparent,
                         ),
                     ) {
-                        state.links.forEach {
-                            ArrowPreference(
-                                title = it.fullText,
-                                onClick = {
-                                    actions.onOpenLink(it.url)
-                                }
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = ABOUT_INTRO_TITLE,
+                                color = colorScheme.onSurface,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
                             )
+                            Text(
+                                modifier = Modifier.padding(top = 8.dp),
+                                text = ABOUT_INTRO_SUMMARY,
+                                color = colorScheme.onSurfaceVariantSummary,
+                                fontSize = 13.sp,
+                                lineHeight = 19.sp,
+                            )
+                            ABOUT_INTRO.forEach { entry ->
+                                Text(
+                                    modifier = Modifier.padding(top = 12.dp),
+                                    text = entry.title,
+                                    color = colorScheme.onSurface,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                                Text(
+                                    modifier = Modifier.padding(top = 3.dp),
+                                    text = entry.desc,
+                                    color = colorScheme.onSurfaceVariantSummary,
+                                    fontSize = 13.sp,
+                                    lineHeight = 19.sp,
+                                )
+                            }
+                        }
+                    }
+                    Card(
+                        modifier = Modifier
+                            .padding(horizontal = 12.dp)
+                            .padding(top = 12.dp)
+                            .then(
+                                if (enableBlur) {
+                                    Modifier.textureBlur(
+                                        backdrop = backdrop,
+                                        shape = RoundedCornerShape(16.dp),
+                                        blurRadius = 60f,
+                                        colors = BlurColors(blendColors = blendColors),
+                                        enabled = true,
+                                    )
+                                } else Modifier
+                            ),
+                        colors = CardDefaults.defaultColors(
+                            if (enableBlur) Color.Transparent else colorScheme.surfaceContainer,
+                            Color.Transparent,
+                        ),
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(
+                                text = ABOUT_TUTORIAL_TITLE,
+                                color = colorScheme.onSurface,
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            ABOUT_TUTORIAL.forEach { entry ->
+                                Text(
+                                    modifier = Modifier.padding(top = 12.dp),
+                                    text = entry.title,
+                                    color = colorScheme.onSurface,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                )
+                                Text(
+                                    modifier = Modifier.padding(top = 3.dp),
+                                    text = entry.desc,
+                                    color = colorScheme.onSurfaceVariantSummary,
+                                    fontSize = 13.sp,
+                                    lineHeight = 19.sp,
+                                )
+                            }
                         }
                     }
                     Spacer(

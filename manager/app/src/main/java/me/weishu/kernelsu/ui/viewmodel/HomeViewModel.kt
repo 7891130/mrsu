@@ -20,6 +20,8 @@ import me.weishu.kernelsu.ksuApp
 import me.weishu.kernelsu.ui.screen.home.HomeUiState
 import me.weishu.kernelsu.ui.screen.home.SystemInfo
 import me.weishu.kernelsu.ui.screen.home.getManagerVersion
+import me.weishu.kernelsu.ui.util.Announcement
+import me.weishu.kernelsu.ui.util.checkAnnouncement
 import me.weishu.kernelsu.ui.util.checkNewVersion
 import me.weishu.kernelsu.ui.util.getSELinuxStatusRaw
 import me.weishu.kernelsu.ui.util.module.LatestVersionInfo
@@ -37,10 +39,14 @@ class HomeViewModel(
         viewModelScope.launch {
             val baseState = withContext(Dispatchers.IO) { buildState() }
             _uiState.update { baseState }
-            if (baseState.checkUpdateEnabled) {
-                val latestVersionInfo = withContext(Dispatchers.IO) { checkNewVersion() }
-                _uiState.update { it.copy(latestVersionInfo = latestVersionInfo) }
+            // 更新检查与公告彼此独立：关闭更新检查不影响公告展示。
+            val latestVersionInfo = if (baseState.checkUpdateEnabled) {
+                withContext(Dispatchers.IO) { checkNewVersion() }
+            } else {
+                LatestVersionInfo()
             }
+            val announcement: Announcement? = withContext(Dispatchers.IO) { checkAnnouncement() }
+            _uiState.update { it.copy(latestVersionInfo = latestVersionInfo, announcement = announcement) }
         }
     }
 

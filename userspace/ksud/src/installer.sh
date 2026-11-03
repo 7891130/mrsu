@@ -52,8 +52,15 @@ is_mounted() {
   return $?
 }
 
+diag() {
+  [ -z "$KSU_INSTALL_DIAG" ] && return 0
+  echo "[diag] $*" >> "$KSU_INSTALL_DIAG" 2>/dev/null
+  return 0
+}
+
 abort() {
   ui_print "$1"
+  diag "abort: $1"
   $BOOTMODE || recovery_cleanup
   [ ! -z $MODPATH ] && rm -rf $MODPATH
   rm -rf $TMPDIR
@@ -355,13 +362,17 @@ handle_partition() {
 
 # Require OUTFD, ZIPFILE to be set
 install_module() {
+  diag "start BOOTMODE=$BOOTMODE TMPDIR=$TMPDIR ZIPFILE=$ZIPFILE"
+  diag "zygote-line=$(ps 2>/dev/null | grep zygote | head -n 1)"
   rm -rf $TMPDIR
-  mkdir -p $TMPDIR
-  chcon u:object_r:system_file:s0 $TMPDIR
-  cd $TMPDIR
+  mkdir -p $TMPDIR; diag "mkdir-TMPDIR rc=$?"
+  chcon u:object_r:system_file:s0 $TMPDIR; diag "chcon-TMPDIR rc=$?"
+  cd $TMPDIR; diag "cd-TMPDIR rc=$? pwd=$(pwd)"
 
   mount_partitions
+  diag "after-mount_partitions"
   api_level_arch_detect
+  diag "api=$API arch=$ARCH"
 
   # Setup busybox and binaries
   if $BOOTMODE; then
@@ -372,6 +383,7 @@ install_module() {
 
   # Extract prop file
   unzip -o "$ZIPFILE" module.prop -d $TMPDIR >&2
+  diag "unzip-module.prop rc=$? exists=$([ -f $TMPDIR/module.prop ] && echo yes || echo no)"
   [ ! -f $TMPDIR/module.prop ] && abort "! Unable to extract zip file!"
 
   local MODDIRNAME=modules
@@ -484,7 +496,7 @@ install_module() {
 [ -z $BOOTMODE ] && BOOTMODE=false
 
 NVBASE=/data/adb
-TMPDIR=/dev/tmp
+TMPDIR=${KSU_TMPDIR:-/dev/tmp}
 POSTFSDATAD=$NVBASE/post-fs-data.d
 SERVICED=$NVBASE/service.d
 

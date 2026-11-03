@@ -1,6 +1,9 @@
 package me.weishu.kernelsu.ui.screen.colorpalette
 
 import androidx.activity.compose.LocalActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
@@ -13,6 +16,7 @@ import me.weishu.kernelsu.KernelSUApplication
 import me.weishu.kernelsu.ui.LocalUiMode
 import me.weishu.kernelsu.ui.UiMode
 import me.weishu.kernelsu.ui.navigation3.LocalNavigator
+import me.weishu.kernelsu.ui.navigation3.Route
 import me.weishu.kernelsu.ui.theme.ColorMode
 import me.weishu.kernelsu.ui.viewmodel.SettingsViewModel
 
@@ -39,6 +43,13 @@ fun ColorPaletteScreen() {
         currentPaletteStyle = currentPaletteStyle,
         currentColorSpec = currentColorSpec,
     )
+    val pickBackground = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        // The picked picture is cropped to the screen aspect ratio on a dedicated screen before
+        // it is saved as the background.
+        if (uri != null) navigator.push(Route.BackgroundCrop(uri.toString()))
+    }
     val actions = ColorPaletteScreenActions(
         onBack = dropUnlessResumed { navigator.pop() },
         onSetThemeMode = viewModel::setThemeMode,
@@ -60,6 +71,14 @@ fun ColorPaletteScreen() {
         onSetPagerInterceptionMode = viewModel::setPagerInterceptionMode,
         onSetPageScale = viewModel::setPageScale,
         onSetModuleDescriptionMaxLines = viewModel::setModuleDescriptionMaxLines,
+        onPickAppBackground = {
+            pickBackground.launch(
+                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+            )
+        },
+        onClearAppBackground = viewModel::clearAppBackground,
+        onSetAppBackgroundDim = viewModel::setAppBackgroundDim,
+        onSetAppCardDim = viewModel::setAppCardDim,
     )
 
     when (LocalUiMode.current) {

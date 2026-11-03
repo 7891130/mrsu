@@ -22,6 +22,8 @@ import top.yukonga.miuix.kmp.theme.ThemePaletteStyle
 @Composable
 fun MiuixKernelSUTheme(
     appSettings: AppSettings,
+    backgroundDim: Float? = null,
+    cardDim: Float? = null,
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
@@ -77,10 +79,57 @@ fun MiuixKernelSUTheme(
                 }
             }
             MonetColorsProvider.UpdateCss()
-            CompositionLocalProvider(
-                LocalContentColor provides MiuixTheme.colorScheme.onBackground,
-            ) {
-                content()
+            if (backgroundDim == null) {
+                CompositionLocalProvider(
+                    LocalContentColor provides MiuixTheme.colorScheme.onBackground,
+                ) {
+                    content()
+                }
+            } else {
+                // A custom background image is active: let the page surface become a partly
+                // transparent black veil so the picture shows through every screen.
+                // Cards and sheets can be tuned separately from the page backdrop so the
+                // picture stays readable behind lists, dialogs and preference cards.
+                val cardAlpha = (cardDim ?: backgroundDim).coerceIn(0f, 0.95f)
+                val cardVeil = Color.Black.copy(alpha = cardAlpha)
+                // Once a layer gets dark the default dark-on-light text becomes unreadable, so
+                // the matching "on" colors flip to light variants.
+                val pageOn = if (backgroundDim >= 0.45f) Color.White else MiuixTheme.colorScheme.onBackground
+                val cardOn = if (cardAlpha >= 0.45f) Color.White else MiuixTheme.colorScheme.onSurfaceContainer
+                val translucentScheme = MiuixTheme.colorScheme.copy(
+                    // The page darkness is painted once by AppBackground, so pages themselves
+                    // stay fully transparent and the picture is never double dimmed.
+                    background = Color.Transparent,
+                    surface = Color.Transparent,
+                    onBackground = pageOn,
+                    onBackgroundVariant = pageOn.copy(alpha = 0.8f),
+                    onSurface = pageOn,
+                    onSurfaceSecondary = pageOn.copy(alpha = 0.8f),
+                    onSurfaceVariantSummary = pageOn.copy(alpha = 0.75f),
+                    onSurfaceVariantActions = pageOn,
+                    // Cards / sheets / preference blocks use the container tokens and get
+                    // their own, independently adjustable darkness.
+                    surfaceContainer = cardVeil,
+                    surfaceContainerHigh = cardVeil,
+                    surfaceContainerHighest = cardVeil,
+                    onSurfaceContainer = cardOn,
+                    onSurfaceContainerVariant = cardOn.copy(alpha = 0.8f),
+                    onSurfaceContainerHigh = cardOn,
+                    onSurfaceContainerHighest = cardOn,
+                )
+                MiuixTheme(
+                    colors = translucentScheme,
+                    textStyles = MiuixTheme.textStyles,
+                ) {
+                    CompositionLocalProvider(
+                        LocalContentColor provides translucentScheme.onBackground,
+                        // Hand the same palette to widgets that Miuix renders in its own popup
+                        // host, where `MiuixTheme.colorScheme` falls back to the opaque default.
+                        LocalAppColorScheme provides translucentScheme,
+                    ) {
+                        content()
+                    }
+                }
             }
         }
     )

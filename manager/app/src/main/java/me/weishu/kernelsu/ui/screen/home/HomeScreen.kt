@@ -24,9 +24,12 @@ import me.weishu.kernelsu.R
 import me.weishu.kernelsu.magica.MagicaService
 import me.weishu.kernelsu.ui.LocalUiMode
 import me.weishu.kernelsu.ui.UiMode
+import me.weishu.kernelsu.ui.component.dialog.rememberConfirmDialog
 import me.weishu.kernelsu.ui.component.dialog.rememberLoadingDialog
 import me.weishu.kernelsu.ui.navigation3.Navigator
 import me.weishu.kernelsu.ui.navigation3.Route
+import me.weishu.kernelsu.ui.util.lastShownAnnouncementId
+import me.weishu.kernelsu.ui.util.markAnnouncementShown
 import me.weishu.kernelsu.ui.viewmodel.HomeViewModel
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -41,6 +44,20 @@ fun HomePager(
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
     val loadingDialog = rememberLoadingDialog()
+    val announcementDialog = rememberConfirmDialog(onConfirm = {})
+    val announcement = uiState.announcement
+    // 新公告首次出现时自动弹一次，同一条公告只提示一次
+    LaunchedEffect(announcement?.id) {
+        val current = announcement ?: return@LaunchedEffect
+        if (!current.isValid || current.id == lastShownAnnouncementId(context)) return@LaunchedEffect
+        markAnnouncementShown(current.id, context)
+        announcementDialog.showConfirm(
+            title = current.displayTitle.ifBlank { "公告" },
+            content = current.content.takeIf { it.isNotBlank() },
+            markdown = false,
+            confirm = "知道了",
+        )
+    }
     val scope = rememberCoroutineScope()
     val latestIsCurrentPage by rememberUpdatedState(isCurrentPage)
     val initialResumeHandled = rememberSaveable { mutableStateOf(false) }

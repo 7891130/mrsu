@@ -3,47 +3,30 @@ package me.weishu.kernelsu.ui.util
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.RectangleShape
-import top.yukonga.miuix.kmp.blur.BlendColorEntry
-import top.yukonga.miuix.kmp.blur.BlurColors
 import top.yukonga.miuix.kmp.blur.LayerBackdrop
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import top.yukonga.miuix.kmp.blur.textureBlur
-import top.yukonga.miuix.kmp.shader.isRenderEffectSupported
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 
+/**
+ * 顶栏/底栏模糊已移除。
+ *
+ * 原实现用 textureBlur + surface(alpha 0.87) 混合绘制顶栏/底栏，
+ * 在自定义窗口背景场景下会导致顶栏与底栏区域整体发黑，
+ * 因此这里始终返回 null，各页面顶栏/底栏回退为不透明 surface 颜色。
+ */
 @Composable
-fun rememberBlurBackdrop(enableBlur: Boolean): LayerBackdrop? {
-    if (!enableBlur || !isRenderEffectSupported()) return null
-    val surfaceColor = MiuixTheme.colorScheme.surface
-    return rememberLayerBackdrop {
-        drawRect(surfaceColor)
-        drawContent()
-    }
-}
+@Suppress("UNUSED_PARAMETER")
+fun rememberBlurBackdrop(enableBlur: Boolean): LayerBackdrop? = null
 
+/**
+ * 保留调用签名以便各页面顶栏/底栏统一包裹，但不再做任何模糊绘制。
+ */
 @Composable
+@Suppress("UNUSED_PARAMETER")
 fun BlurredBar(
     backdrop: LayerBackdrop?,
     blurActive: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    Box(
-        modifier = if (blurActive && backdrop != null) {
-            Modifier.textureBlur(
-                backdrop = backdrop,
-                shape = RectangleShape,
-                blurRadius = 25f,
-                colors = BlurColors(
-                    blendColors = listOf(
-                        BlendColorEntry(color = MiuixTheme.colorScheme.surface.copy(0.87f)),
-                    ),
-                ),
-            )
-        } else {
-            Modifier
-        },
-    ) {
+    Box(modifier = Modifier) {
         content()
     }
 }
