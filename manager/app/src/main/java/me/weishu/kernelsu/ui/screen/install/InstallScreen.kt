@@ -22,6 +22,7 @@ import androidx.lifecycle.compose.dropUnlessResumed
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import me.weishu.kernelsu.Natives
 import me.weishu.kernelsu.R
 import me.weishu.kernelsu.getKernelVersion
 import me.weishu.kernelsu.ui.LocalUiMode
@@ -76,14 +77,26 @@ fun InstallScreen() {
     val rootAvailable by produceState(initialValue = false) { value = rootAvailable() }
     val isAbDevice by produceState(initialValue = false) { value = isAbDevice() }
     val isGkiDevice by produceState(initialValue = false) { value = getKernelVersion().isGKI() }
+    // 越狱模式（late-load）运行在已锁定 BL 上，任何写入分区的操作都有变砖风险
+    val jailbreakMode by produceState(initialValue = false) { value = Natives.isLateLoadMode }
+    val partitionWriteBlockedTip = stringResource(id = R.string.jailbreak_mode_partition_blocked)
 
     val selectFileTip = stringResource(id = R.string.select_file_tip, defaultPartition)
     val selectFileTipNoGki = stringResource(id = R.string.select_file_tip_nogki)
     val downloadFileMsg = stringResource(id = R.string.download_dialog_msg)
-    val installMethodOptions = remember(rootAvailable, isAbDevice, isGkiDevice, selectFileTip, selectFileTipNoGki, downloadFileMsg) {
+    val installMethodOptions = remember(
+        rootAvailable, isAbDevice, isGkiDevice, selectFileTip, selectFileTipNoGki, downloadFileMsg,
+        jailbreakMode, partitionWriteBlockedTip
+    ) {
         buildList {
-            add(InstallMethod.SelectFile(summary = if (isGkiDevice) selectFileTip else selectFileTipNoGki))
-            add(InstallMethod.DownloadFile(summary = downloadFileMsg))
+            // 越狱模式下所有写分区的入口依然展示，但 summary 改为禁用说明，由 UI 层置灰
+            val blockedSummary = if (jailbreakMode) partitionWriteBlockedTip else null
+            add(
+                InstallMethod.SelectFile(
+                    summary = blockedSummary ?: if (isGkiDevice) selectFileTip else selectFileTipNoGki
+                )
+            )
+            add(InstallMethod.DownloadFile(summary = blockedSummary ?: downloadFileMsg))
             if (rootAvailable && isGkiDevice) {
                 add(InstallMethod.DirectInstall)
                 if (isAbDevice) add(InstallMethod.DirectInstallToInactiveSlot)
@@ -125,6 +138,11 @@ fun InstallScreen() {
 
     val onInstall = {
         installMethod?.let { method ->
+            // 越狱模式下最后一次兜底拦截：任何写入分区的安装方式都不允许进入刷写流程
+            if (jailbreakMode && method.writesPartition) {
+                showMessage(partitionWriteBlockedTip)
+                return@let
+            }
             navigator.push(
                 Route.Flash(
                     when (method) {
@@ -219,7 +237,12 @@ fun InstallScreen() {
     ) {
         if (it.resultCode == Activity.RESULT_OK) {
             it.data?.data?.let { uri ->
-                installMethod = InstallMethod.SelectFile(uri, summary = if (isGkiDevice) selectFileTip else selectFileTipNoGki)
+                // 越狱模式下不允许通过任何途径进入写分区的安装方式
+                if (jailbreakMode) {
+                    showMessage(partitionWriteBlockedTip)
+                } else {
+                    installMethod = InstallMethod.SelectFile(uri, summary = if (isGkiDevice) selectFileTip else selectFileTipNoGki)
+                }
             }
         }
     }
@@ -234,6 +257,8 @@ fun InstallScreen() {
         currentKmi = currentKmi,
         slotSuffix = slotSuffix,
         installMethodOptions = installMethodOptions,
+        jailbreakMode = jailbreakMode,
+        partitionWriteBlockedTip = partitionWriteBlockedTip,
         canSelectPartition = installMethod is InstallMethod.DirectInstall ||
             installMethod is InstallMethod.DirectInstallToInactiveSlot ||
             installMethod is InstallMethod.DownloadFile,
@@ -245,10 +270,22 @@ fun InstallScreen() {
     )
     val actions = InstallScreenActions(
         onBack = dropUnlessResumed { navigator.pop() },
-        onSelectMethod = { method -> installMethod = method },
-        onDownloadFile = { downloadDialogShown = true },
+        onSelectMethod = { method ->
+            if (jailbreakMode && method.writesPartition) {
+                showMessage(partitionWriteBlockedTip)
+            } else {
+                installMethod = method
+            }
+        },
+        onDownloadFile = {
+            if (jailbreakMode) showMessage(partitionWriteBlockedTip) else downloadDialogShown = true
+        },
         onSelectBootImage = {
-            selectImageLauncher.launch(Intent(Intent.ACTION_GET_CONTENT).apply { type = "application/octet-stream" })
+            if (jailbreakMode) {
+                showMessage(partitionWriteBlockedTip)
+            } else {
+                selectImageLauncher.launch(Intent(Intent.ACTION_GET_CONTENT).apply { type = "application/octet-stream" })
+            }
         },
         onUploadLkm = {
             selectLkmLauncher.launch(Intent(Intent.ACTION_GET_CONTENT).apply { type = "application/octet-stream" })

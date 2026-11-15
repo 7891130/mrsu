@@ -310,7 +310,9 @@ private fun SelectInstallMethod(
     val dialogContent = stringResource(id = R.string.install_inactive_slot_warning)
 
     val onClick = { option: InstallMethod ->
-        when (option) {
+        if (state.jailbreakMode && option.writesPartition) {
+            // 越狱模式下写分区功能已禁用，点击不做任何响应
+        } else when (option) {
             is InstallMethod.SelectFile -> onSelectBootImage()
             is InstallMethod.DownloadFile -> onDownloadFile()
             is InstallMethod.DirectInstall -> onSelected(option)
@@ -321,13 +323,16 @@ private fun SelectInstallMethod(
     Column {
         state.installMethodOptions.forEach { option ->
             val interactionSource = remember { MutableInteractionSource() }
+            val blocked = state.jailbreakMode && option.writesPartition
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .graphicsLayer(alpha = if (blocked) 0.4f else 1f)
                     .toggleable(
                         value = option.javaClass == state.installMethod?.javaClass,
                         onValueChange = { onClick(option) },
+                        enabled = !blocked,
                         role = Role.RadioButton,
                         indication = LocalIndication.current,
                         interactionSource = interactionSource
@@ -335,9 +340,9 @@ private fun SelectInstallMethod(
             ) {
                 CheckboxPreference(
                     title = stringResource(id = option.label),
-                    summary = option.summary,
+                    summary = if (blocked) state.partitionWriteBlockedTip else option.summary,
                     checked = option.javaClass == state.installMethod?.javaClass,
-                    onCheckedChange = { onClick(option) },
+                    onCheckedChange = { if (!blocked) onClick(option) },
                 )
             }
         }

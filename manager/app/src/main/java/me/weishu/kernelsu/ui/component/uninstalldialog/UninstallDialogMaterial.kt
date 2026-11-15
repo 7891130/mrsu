@@ -16,6 +16,7 @@ import me.weishu.kernelsu.ui.component.material.SegmentedListItem
 import me.weishu.kernelsu.ui.navigation3.LocalNavigator
 import me.weishu.kernelsu.ui.navigation3.Route
 import me.weishu.kernelsu.ui.screen.flash.FlashIt
+import me.weishu.kernelsu.Natives
 import me.weishu.kernelsu.ui.screen.flash.UninstallType
 import me.weishu.kernelsu.ui.screen.flash.UninstallType.PERMANENT
 import me.weishu.kernelsu.ui.screen.flash.UninstallType.RESTORE_STOCK_IMAGE
@@ -26,6 +27,9 @@ fun UninstallDialogMaterial(
     onDismissRequest: () -> Unit
 ) {
     val navigator = LocalNavigator.current
+    // 越狱模式下禁止「恢复原厂镜像」这类写分区的操作
+    val jailbreakMode = Natives.isLateLoadMode
+    val blockedTip = stringResource(R.string.jailbreak_mode_partition_blocked)
     val options = listOf(
         // TEMPORARY,
         PERMANENT,
@@ -51,13 +55,19 @@ fun UninstallDialogMaterial(
                     modifier = Modifier,
                     content = options.map { type ->
                         {
+                            val blocked = jailbreakMode && type == RESTORE_STOCK_IMAGE
                             SegmentedListItem(
                                 onClick = {
-                                    showConfirmDialog.value = true
-                                    runType.value = type
+                                    if (!blocked) {
+                                        showConfirmDialog.value = true
+                                        runType.value = type
+                                    }
                                 },
+                                enabled = !blocked,
                                 headlineContent = { Text(stringResource(type.title)) },
-                                supportingContent = { Text(stringResource(type.message)) },
+                                supportingContent = {
+                                    Text(if (blocked) blockedTip else stringResource(type.message))
+                                },
                                 leadingContent = {
                                     Icon(
                                         imageVector = type.icon,

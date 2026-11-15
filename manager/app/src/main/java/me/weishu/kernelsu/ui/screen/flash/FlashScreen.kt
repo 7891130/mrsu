@@ -3,6 +3,7 @@ package me.weishu.kernelsu.ui.screen.flash
 import android.widget.Toast
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -11,6 +12,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
@@ -35,13 +37,22 @@ fun FlashScreen(flashIt: FlashIt, onBackEnabledChange: (Boolean) -> Unit) {
     val logContent = remember { StringBuilder() }
     var showRebootAction by rememberSaveable { mutableStateOf(false) }
     var flashingStatus by rememberSaveable { mutableStateOf(FlashingStatus.FLASHING) }
-    val needJailbreakWarning = flashIt is FlashIt.FlashBoot && Natives.isLateLoadMode
+    val jailbreakMode = Natives.isLateLoadMode
+    val needJailbreakWarning = flashIt is FlashIt.FlashBoot && jailbreakMode
+    // 越狱模式运行在已锁定 BL 上，写 boot / 恢复原厂镜像会直接变砖，因此整条流程禁止进入
+    val partitionWriteBlocked = jailbreakMode && (
+        flashIt is FlashIt.FlashBoot ||
+            flashIt is FlashIt.DownloadBoot ||
+            flashIt == FlashIt.FlashRestore
+        )
     // Soft reboot keeps the jailbreak and still applies modules
     val softReboot = flashIt is FlashIt.FlashModules && isSoftRebootPreferred()
-    var flashingEnabled by rememberSaveable { mutableStateOf(!needJailbreakWarning) }
+    var flashingEnabled by rememberSaveable {
+        mutableStateOf(!needJailbreakWarning && !partitionWriteBlocked)
+    }
     val uiMode = LocalUiMode.current
     val snackbarHost = remember { SnackbarHostState() }
-    val backEnabled = flashingStatus != FlashingStatus.FLASHING
+    val backEnabled = flashingStatus != FlashingStatus.FLASHING || partitionWriteBlocked
 
     SideEffect { onBackEnabledChange(backEnabled) }
     NavigationBackHandler(
@@ -60,6 +71,15 @@ fun FlashScreen(flashIt: FlashIt, onBackEnabledChange: (Boolean) -> Unit) {
         }
     }
 
+    val blockedTip = stringResource(R.string.jailbreak_mode_partition_blocked)
+    LaunchedEffect(partitionWriteBlocked) {
+        if (partitionWriteBlocked) {
+            text = blockedTip
+            flashingStatus = FlashingStatus.FAILED
+            showMessage(blockedTip)
+        }
+    }
+
     FlashEffect(
         flashIt = flashIt,
         text = text,
@@ -74,7 +94,7 @@ fun FlashScreen(flashIt: FlashIt, onBackEnabledChange: (Boolean) -> Unit) {
         text = text,
         showRebootAction = showRebootAction,
         flashingStatus = flashingStatus,
-        showJailbreakWarning = needJailbreakWarning && !flashingEnabled,
+        showJailbreakWarning = needJailbreakWarning && !flashingEnabled && !partitionWriteBlocked,
         rebootLabelRes = if (softReboot) R.string.reboot_soft else R.string.reboot,
     )
     val actions = FlashScreenActions(

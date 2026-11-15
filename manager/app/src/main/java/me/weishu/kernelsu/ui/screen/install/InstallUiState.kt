@@ -14,6 +14,9 @@ internal data class InstallUiState(
     val currentKmi: String,
     val slotSuffix: String,
     val installMethodOptions: List<InstallMethod>,
+    // 越狱模式下会写入分区的安装方式全部置灰禁用
+    val jailbreakMode: Boolean = false,
+    val partitionWriteBlockedTip: String = "",
     val canSelectPartition: Boolean,
     val advancedOptionsShown: Boolean,
     val allowShell: Boolean,

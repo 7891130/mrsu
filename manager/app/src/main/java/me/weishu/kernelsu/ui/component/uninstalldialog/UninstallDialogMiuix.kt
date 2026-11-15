@@ -14,6 +14,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import me.weishu.kernelsu.Natives
 import me.weishu.kernelsu.R
 import me.weishu.kernelsu.ui.component.dialog.rememberConfirmDialog
 import me.weishu.kernelsu.ui.navigation3.LocalNavigator
@@ -38,6 +39,7 @@ fun UninstallDialogMiuix(
 ) {
     val context = LocalContext.current
     val navigator = LocalNavigator.current
+    val blockedTip = stringResource(R.string.jailbreak_mode_partition_blocked)
     val options = listOf(
         // TEMPORARY,
         PERMANENT,
@@ -76,12 +78,18 @@ fun UninstallDialogMiuix(
                 color = MiuixTheme.colorScheme.onSurface
             )
             options.forEach { type ->
+                // 越狱模式下禁止「恢复原厂镜像」这类写分区的操作
+                val blocked = Natives.isLateLoadMode && type == RESTORE_STOCK_IMAGE
                 ArrowPreference(
                     onClick = {
-                        showConfirmDialog.value = true
-                        runType.value = type
+                        if (!blocked) {
+                            showConfirmDialog.value = true
+                            runType.value = type
+                        }
                     },
                     title = stringResource(type.title),
+                    summary = if (blocked) blockedTip else null,
+                    enabled = !blocked,
                     startAction = {
                         Icon(
                             imageVector = type.icon,

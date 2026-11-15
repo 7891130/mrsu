@@ -15,29 +15,49 @@ internal sealed class InstallMethod : Parcelable {
         val uri: Uri? = null,
         @get:StringRes override val label: Int = R.string.select_file,
         override val summary: String?
-    ) : InstallMethod()
+    ) : InstallMethod() {
+        override val writesPartition: Boolean
+            get() = true
+    }
 
     data class DownloadFile(
         val url: String? = null,
         val partition: String? = null,
         @get:StringRes override val label: Int = R.string.download_file,
         override val summary: String?
-    ) : InstallMethod()
+    ) : InstallMethod() {
+        override val writesPartition: Boolean
+            get() = true
+    }
 
     data object DirectInstall : InstallMethod() {
         override val label: Int
             get() = R.string.direct_install
+
+        override val writesPartition: Boolean
+            get() = true
     }
 
     data object DirectInstallToInactiveSlot : InstallMethod() {
         override val label: Int
             get() = R.string.install_inactive_slot
+
+        override val writesPartition: Boolean
+            get() = true
     }
 
     abstract val label: Int
 
     @IgnoredOnParcel
     open val summary: String? = null
+
+    /**
+     * 该安装方式最终会写入 boot / init_boot 等分区。
+     * 越狱模式（jailbreak / late-load）跑在已锁 BL 上，刷写分区会直接变砖，
+     * 因此该模式下所有 writesPartition 的入口都必须在 UI 上置灰禁用。
+     */
+    @IgnoredOnParcel
+    open val writesPartition: Boolean = false
 }
 
 fun isKoFile(context: Context, uri: Uri): Boolean {

@@ -224,7 +224,9 @@ private fun SelectInstallMethod(
     val dialogContent = stringResource(R.string.install_inactive_slot_warning)
 
     val onClick = { option: InstallMethod ->
-        when (option) {
+        if (state.jailbreakMode && option.writesPartition) {
+            // 越狱模式下写分区功能已禁用，点击不做任何响应
+        } else when (option) {
             is InstallMethod.SelectFile -> onSelectBootImage()
             is InstallMethod.DownloadFile -> onDownloadFile()
             is InstallMethod.DirectInstall -> onSelected(option)
@@ -232,15 +234,17 @@ private fun SelectInstallMethod(
         }
     }
 
-    key(state.installMethodOptions.size) {
+    key(state.installMethodOptions.size, state.jailbreakMode) {
         SegmentedColumn(
             modifier = Modifier.padding(horizontal = 16.dp),
             content = state.installMethodOptions.map { option ->
                 {
+                    val blocked = state.jailbreakMode && option.writesPartition
                     SegmentedRadioItem(
                         title = stringResource(option.label),
-                        summary = option.summary,
+                        summary = if (blocked) state.partitionWriteBlockedTip else option.summary,
                         selected = option.javaClass == state.installMethod?.javaClass,
+                        enabled = !blocked,
                         onClick = { onClick(option) }
                     )
                 }
