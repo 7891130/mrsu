@@ -15,6 +15,8 @@ REPO="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY not set}"
 TOKEN="${GITHUB_TOKEN:?GITHUB_TOKEN not set}"
 TAG="${CI_REL_TAG:-ci-${GITHUB_RUN_ID:?GITHUB_RUN_ID not set}}"
 API="https://api.github.com/repos/${REPO}"
+UPLOAD_API="https://uploads.github.com/repos/${REPO}"
+REL_ID=""
 
 auth_hdr="Authorization: token ${TOKEN}"
 
@@ -65,12 +67,13 @@ cmd_upload() {
   tar czf "/tmp/${name}.tar.gz" -C "$stage" "$name"
 
   ensure_release
+  # asset upload MUST go through uploads.github.com, api.github.com returns 404
   local code
   code=$(curl -sS -o /tmp/_up.json -w '%{http_code}' -X POST \
     -H "$auth_hdr" -H "Accept: application/vnd.github+json" \
     -H "Content-Type: application/octet-stream" \
     --data-binary "@/tmp/${name}.tar.gz" \
-    "${API}/releases/${REL_ID}/assets?name=${name}.tar.gz")
+    "${UPLOAD_API}/releases/${REL_ID}/assets?name=${name}.tar.gz")
   echo "rel-artifact: upload ${name} -> http ${code}"
   if [ "$code" != "201" ]; then
     cat /tmp/_up.json >&2 || true
