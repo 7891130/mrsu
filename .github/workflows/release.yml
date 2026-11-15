@@ -7,15 +7,21 @@ on:
 
 jobs:
   build-manager:
+    permissions:
+      contents: write
     uses: ./.github/workflows/build-manager.yml
     secrets: inherit
   release:
     needs:
       - build-manager
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v8
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/rel-artifact.sh download-all .
 
       - name: Rename ksud
         run: |

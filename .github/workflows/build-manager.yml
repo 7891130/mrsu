@@ -37,6 +37,9 @@ on:
       - 'Cargo.toml'
   workflow_call:
 
+permissions:
+  contents: write
+
 jobs:
   generate-key:
     runs-on: ubuntu-latest
@@ -201,17 +204,19 @@ jobs:
 
       - name: Upload build artifact
         if: ${{ github.event_name == 'pull_request' || (github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/mrsu-local')) || github.ref_type == 'tag' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: manager-gradle
-          path: manager/app/build/outputs/apk/release/*.apk
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          bash .github/scripts/rel-artifact.sh upload manager-gradle "$GITHUB_WORKSPACE"/manager/app/build/outputs/apk/release/*.apk
 
       - name: Upload mappings
-        uses: actions/upload-artifact@v7
         if: ${{ ( github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/mrsu-local' )) || github.ref_type == 'tag' }}
-        with:
-          name: "mappings"
-          path: "manager/app/build/outputs/mapping/release/"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          bash .github/scripts/rel-artifact.sh upload mappings "$GITHUB_WORKSPACE"/manager/app/build/outputs/mapping/release/
 
   repack-manager:
     needs: [build-manager, build-ksud, generate-key]
@@ -234,28 +239,24 @@ jobs:
           fi
 
       - name: Download gradle manager artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: manager-gradle
-          path: artifacts/manager-gradle
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/rel-artifact.sh download manager-gradle artifacts
 
       - name: Download arm64 ksud
-        uses: actions/download-artifact@v8
-        with:
-          name: ksud-aarch64-linux-android
-          path: artifacts/ksud-aarch64-linux-android
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/rel-artifact.sh download ksud-aarch64-linux-android artifacts
 
       - name: Download x86_64 ksud
-        uses: actions/download-artifact@v8
-        with:
-          name: ksud-x86_64-linux-android
-          path: artifacts/ksud-x86_64-linux-android
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/rel-artifact.sh download ksud-x86_64-linux-android artifacts
 
       - name: Download RISC-V ksud
-        uses: actions/download-artifact@v8
-        with:
-          name: ksud-riscv64-linux-android
-          path: artifacts/ksud-riscv64-linux-android
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/rel-artifact.sh download ksud-riscv64-linux-android artifacts
 
       - name: Place manager apk and ksud artifacts
         run: |
@@ -320,10 +321,11 @@ jobs:
 
       - name: Upload build artifact
         if: ${{ github.event_name == 'pull_request' || (github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/mrsu-local')) || github.ref_type == 'tag' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: manager
-          path: dist/*.apk
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          bash .github/scripts/rel-artifact.sh upload manager "$GITHUB_WORKSPACE"/dist/*.apk
 
       - name: Upload to telegram
         if: github.event_name != 'pull_request' && steps.need_upload.outputs.UPLOAD == 'true'

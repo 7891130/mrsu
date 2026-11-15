@@ -13,5 +13,7 @@ concurrency:
 
 jobs:
   release:
+    permissions:
+      contents: write
     uses: ./.github/workflows/build-manager.yml
     secrets: inherit

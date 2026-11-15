@@ -22,7 +22,9 @@ jobs:
         fetch-depth: 0
 
     - name: Download artifacts
-      uses: actions/download-artifact@v8
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: bash .github/scripts/rel-artifact.sh download-all .
     
     - name: Prepare LKM files
       if: ${{ inputs.pack_lkm }}
@@ -72,7 +74,6 @@ jobs:
         fi
 
     - name: Upload ksud artifact
-      uses: actions/upload-artifact@v7
-      with:
-        name: ksud-${{ inputs.target }}
-        path: target/${{ inputs.target }}/release/ksud
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: bash .github/scripts/rel-artifact.sh upload ksud-${{ inputs.target }} target/${{ inputs.target }}/release/ksud
