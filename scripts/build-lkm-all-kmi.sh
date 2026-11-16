@@ -75,7 +75,8 @@ for kmi in $KMIS; do
   fi
   rm -f "$REPO_ROOT/kernel/kernelsu.ko"
 
-  echo "-- 完成: $(ls -l "$OUT_DIR/${kmi}_kernelsu.ko" | awk '{print $5" bytes"}')"
+  ko_size=$(wc -c < "$OUT_DIR/${kmi}_kernelsu.ko")
+  echo "-- 完成: ${ko_size// /} bytes"
   echo
 done
 
