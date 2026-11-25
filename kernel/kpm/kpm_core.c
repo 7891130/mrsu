@@ -283,13 +283,13 @@ static const struct ksu_feature_handler kpm_feature_handler = {
     .set_handler = kpm_feature_set,
 };
 
-void kpm_runtime_init(void)
+void __init kpm_runtime_init(void)
 {
     if (ksu_register_feature_handler(&kpm_feature_handler))
         pr_err("kpm: failed to register feature handler\n");
 }
 
-void kpm_runtime_exit(void)
+void __exit kpm_runtime_exit(void)
 {
     struct kpm_module *pos, *n;
 

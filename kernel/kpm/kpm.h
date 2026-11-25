@@ -1,6 +1,7 @@
 #ifndef __KSU_H_KPM
 #define __KSU_H_KPM
 
+#include <linux/init.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
 #include <linux/types.h>
@@ -56,8 +57,8 @@ struct kpm_module {
 };
 
 /* lifecycle */
-void kpm_runtime_init(void);
-void kpm_runtime_exit(void);
+void __init kpm_runtime_init(void);
+void __exit kpm_runtime_exit(void);
 
 /* exec memory */
 void *kpm_alloc_exec(size_t size);
