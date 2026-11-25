@@ -5,8 +5,7 @@
  * Pure logic only: given a target address and its first instructions, produce
  * the patch that jumps to the replacement plus the trampoline that runs the
  * displaced instructions and jumps back. Allocating executable memory and
- * writing the patch into kernel text happens in kpm_hook_install(), which is
- * kernel-only code.
+ * writing the patch into kernel text happens in kpm_hook_install().
  */
 #include <linux/kernel.h>
 #include <linux/string.h>
@@ -19,24 +18,33 @@
 /* adrp x16 / add x16, x16, #lo12 / br x16 */
 #define KPM_HOOK_TMP_REG 16
 
-int kpm_hook_encode_jump(u64 from, u64 to, u32 out[KPM_HOOK_JUMP_INSNS])
+int kpm_hook_encode_jump(u64 from, u64 to, u32 out[KPM_HOOK_MAX_JUMP_INSNS], unsigned int *out_count)
 {
-    u32 adrp, add, br;
+    u32 branch;
 
-    if (!out)
+    if (!out || !out_count)
         return -EINVAL;
 
-    adrp = kpm_insn_gen_adr(from, to, KPM_HOOK_TMP_REG, true);
-    add = kpm_insn_gen_add_sub_imm(KPM_HOOK_TMP_REG, KPM_HOOK_TMP_REG, (s64)(to & 0xfff), true, false);
-    br = kpm_insn_gen_branch_reg(KPM_HOOK_TMP_REG, false);
+    /*
+     * Prefer a single branch: 4 bytes are written atomically, so a thread
+     * running the target cannot observe a partially patched prologue.
+     */
+    branch = kpm_insn_gen_branch_imm(from, to, false);
+    if (branch) {
+        out[0] = branch;
+        *out_count = 1;
+        return 0;
+    }
+
+    out[0] = kpm_insn_gen_adr(from, to, KPM_HOOK_TMP_REG, true);
+    out[1] = kpm_insn_gen_add_sub_imm(KPM_HOOK_TMP_REG, KPM_HOOK_TMP_REG, (s64)(to & 0xfff), true, false);
+    out[2] = kpm_insn_gen_branch_reg(KPM_HOOK_TMP_REG, false);
 
     /* A zero encoding means the generator rejected the operands. */
-    if (!adrp || !add || !br)
+    if (!out[0] || !out[1] || !out[2])
         return -ERANGE;
 
-    out[0] = adrp;
-    out[1] = add;
-    out[2] = br;
+    *out_count = KPM_HOOK_MAX_JUMP_INSNS;
     return 0;
 }
 
@@ -48,21 +56,22 @@ int kpm_hook_build(u64 target, const u32 *prologue, unsigned int count, u64 tram
 
     if (!prologue || !plan || !trampoline_pc)
         return -EINVAL;
-    if (count < KPM_HOOK_PATCH_INSNS)
+    if (count < KPM_HOOK_MAX_PATCH_INSNS)
         return -EINVAL;
     if (target & 0x3)
         return -EINVAL;
 
     memset(plan, 0, sizeof(*plan));
-    plan->saved_count = KPM_HOOK_PATCH_INSNS;
-    plan->resume_pc = target + KPM_HOOK_PATCH_INSNS * 4;
 
-    /* The patch itself jumps from the function entry to the replacement. */
-    ret = kpm_hook_encode_jump(target, replacement, plan->patch);
+    /* The patch jumps from the function entry to the replacement. */
+    ret = kpm_hook_encode_jump(target, replacement, plan->patch, &plan->patch_count);
     if (ret)
         return ret;
 
-    for (i = 0; i < KPM_HOOK_PATCH_INSNS; i++) {
+    plan->saved_count = plan->patch_count;
+    plan->resume_pc = target + (u64)plan->patch_count * 4;
+
+    for (i = 0; i < plan->saved_count; i++) {
         u32 insn = prologue[i];
         u32 relocated = insn;
 
@@ -83,12 +92,16 @@ int kpm_hook_build(u64 target, const u32 *prologue, unsigned int count, u64 tram
         plan->trampoline[i] = relocated;
     }
 
-    /* Jump back into the function right after the displaced instructions. */
-    ret = kpm_hook_encode_jump(trampoline_pc + (u64)KPM_HOOK_PATCH_INSNS * 4, plan->resume_pc,
-                               &plan->trampoline[KPM_HOOK_PATCH_INSNS]);
-    if (ret)
-        return ret;
+    /* Jump from the end of the relocated prologue back into the function. */
+    {
+        unsigned int jump_count = 0;
 
-    plan->trampoline_count = KPM_HOOK_PATCH_INSNS + KPM_HOOK_JUMP_INSNS;
+        ret = kpm_hook_encode_jump(trampoline_pc + (u64)plan->saved_count * 4, plan->resume_pc,
+                                   &plan->trampoline[plan->saved_count], &jump_count);
+        if (ret)
+            return ret;
+        plan->trampoline_count = plan->saved_count + jump_count;
+    }
+
     return 0;
 }
