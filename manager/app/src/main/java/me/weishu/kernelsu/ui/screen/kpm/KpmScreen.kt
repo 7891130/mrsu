@@ -39,6 +39,7 @@ import kotlinx.coroutines.withContext
 import me.weishu.kernelsu.R
 import me.weishu.kernelsu.ui.navigation3.LocalNavigator
 import me.weishu.kernelsu.ui.util.getFileName
+import me.weishu.kernelsu.ui.util.insmodReport
 import me.weishu.kernelsu.ui.util.kpmList
 import me.weishu.kernelsu.ui.util.kpmLoadReport
 import me.weishu.kernelsu.ui.util.kpmStageReport
@@ -46,10 +47,13 @@ import me.weishu.kernelsu.ui.util.kpmStaged
 import me.weishu.kernelsu.ui.util.kpmUnstage
 import java.io.File
 
+/** What to do with a picked file. */
+private enum class PickedMode { LoadKpm, StageKpm, InsmodKo }
+
 /** Copy a picked document into the app cache so ksud can open a real path. */
 private fun Uri.copyIntoCache(context: Context): String {
-    val name = getFileName(context)?.takeIf { it.endsWith(".kpm") }
-        ?: "module-${System.currentTimeMillis()}.kpm"
+    val name = getFileName(context)?.takeIf { it.endsWith(".kpm") || it.endsWith(".ko") }
+        ?: "module-${System.currentTimeMillis()}.bin"
     val target = File(context.cacheDir, name)
     context.contentResolver.openInputStream(this)?.use { input ->
         target.outputStream().use { output -> input.copyTo(output) }
@@ -86,13 +90,17 @@ fun KpmScreen() {
 
     LaunchedEffect(reloadToken) { refresh() }
 
-    fun handlePicked(uri: Uri?, stage: Boolean) {
+    fun handlePicked(uri: Uri?, mode: PickedMode) {
         if (uri == null) return
         scope.launch {
             val report = withContext(Dispatchers.IO) {
                 runCatching {
                     val path = uri.copyIntoCache(context)
-                    if (stage) kpmStageReport(path) else kpmLoadReport(path)
+                    when (mode) {
+                        PickedMode.LoadKpm -> kpmLoadReport(path)
+                        PickedMode.StageKpm -> kpmStageReport(path)
+                        PickedMode.InsmodKo -> insmodReport(path)
+                    }
                 }.getOrElse { it.message ?: it.toString() }
             }
             resultText = report
@@ -101,10 +109,13 @@ fun KpmScreen() {
     }
 
     val loadPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        handlePicked(uri, stage = false)
+        handlePicked(uri, PickedMode.LoadKpm)
     }
     val stagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        handlePicked(uri, stage = true)
+        handlePicked(uri, PickedMode.StageKpm)
+    }
+    val koPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        handlePicked(uri, PickedMode.InsmodKo)
     }
 
     Column(
@@ -149,6 +160,13 @@ fun KpmScreen() {
             ) {
                 Text(stringResource(R.string.kpm_stage_for_boot))
             }
+        }
+
+        OutlinedButton(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = { koPicker.launch(arrayOf("*/*")) },
+        ) {
+            Text(stringResource(R.string.kpm_insmod_ko))
         }
 
         if (resultText.isNotEmpty()) {

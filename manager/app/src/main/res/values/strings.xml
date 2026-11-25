@@ -402,6 +402,6 @@
     <string name="kpm_unstage">Remove from boot</string>
     <string name="kpm_load_now">Load now</string>
     <string name="kpm_stage_for_boot">Add to boot</string>
-    <string name="kpm_last_result">Last result</string>
+    <string name="kpm_last_result">Last result</string>`n    <string name="kpm_insmod_ko">Load .ko into the kernel (insmod)</string>
     <string name="kpm_note">Temporary modules are lost on reboot; staged ones load at boot.</string>
 </resources>

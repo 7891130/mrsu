@@ -229,6 +229,9 @@ fun kpmLoadReport(path: String): String = runKsud("kpm load ${shellQuote(path)}"
 /** Stage a .kpm for boot and return the report. */
 fun kpmStageReport(path: String): String = runKsud("kpm stage ${shellQuote(path)}")
 
+/** Load a plain kernel module (.ko) with symbol resolution, for the report. */
+fun insmodReport(path: String): String = runKsud("insmod ${shellQuote(path)}")
+
 fun install() {
     val start = SystemClock.elapsedRealtime()
     val libadbroot = File(ksuApp.applicationInfo.nativeLibraryDir, "libadbroot.so").absolutePath
