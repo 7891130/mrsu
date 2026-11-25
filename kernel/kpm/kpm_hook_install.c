@@ -28,29 +28,18 @@ static void set_err(char *err, size_t err_len, const char *msg)
         snprintf(err, err_len, "%s", msg);
 }
 
-/* Write `count` instructions of the patch, back to front. */
+/*
+ * Write the whole patch in one go.
+ *
+ * ksu_patch_text() performs the write inside stop_machine(), so every other CPU
+ * is parked while the bytes land: a thread can never fetch a half-updated
+ * prologue. Splitting this into per-instruction calls would give exactly that
+ * window, so it must stay a single call even for the 3-instruction form.
+ */
 static int patch_target(u64 target, const struct kpm_hook_plan *plan)
 {
-    unsigned int i;
-    int ret;
-
-    if (plan->patch_count == 1)
-        return ksu_patch_text((void *)(uintptr_t)target, (void *)&plan->patch[0], sizeof(u32),
-                              KSU_PATCH_TEXT_FLUSH_ICACHE);
-
-    /*
-     * Three instructions cannot be written atomically. Writing the tail first
-     * keeps the window narrow: a thread that already fetched the original first
-     * instruction never lands in a half-written jump.
-     */
-    for (i = plan->patch_count; i-- > 0;) {
-        ret = ksu_patch_text((void *)(uintptr_t)target + i * sizeof(u32), (void *)&plan->patch[i], sizeof(u32),
-                             KSU_PATCH_TEXT_FLUSH_ICACHE);
-        if (ret)
-            return ret;
-    }
-
-    return 0;
+    return ksu_patch_text((void *)(uintptr_t)target, (void *)plan->patch, plan->patch_count * sizeof(u32),
+                          KSU_PATCH_TEXT_FLUSH_ICACHE);
 }
 
 int kpm_hook_install(u64 target, u64 replacement, const char *owner, char *err, size_t err_len)
@@ -130,7 +119,6 @@ int kpm_hook_uninstall(u64 target)
 {
     struct kpm_hook_entry *entry;
     u32 restore[KPM_HOOK_MAX_PATCH_INSNS];
-    unsigned int i;
     int ret = 0;
 
     entry = kpm_hook_table_remove(target);
@@ -139,15 +127,15 @@ int kpm_hook_uninstall(u64 target)
 
     memcpy(restore, entry->plan.saved, sizeof(restore));
 
-    /* Put the original prologue back, front to back. */
-    for (i = 0; i < entry->plan.patch_count; i++) {
-        ret = ksu_patch_text((void *)(uintptr_t)target + i * sizeof(u32), (void *)&restore[i], sizeof(u32),
-                             KSU_PATCH_TEXT_FLUSH_ICACHE);
-        if (ret) {
-            pr_err("kpm: failed to restore 0x%llx (%d)\n", (unsigned long long)target, ret);
-            break;
-        }
-    }
+    /*
+     * Restore in a single call for the same reason the patch is written in one:
+     * per-instruction writes would briefly leave the original first instruction
+     * in front of the leftover jump tail, sending threads to a garbage address.
+     */
+    ret = ksu_patch_text((void *)(uintptr_t)target, restore, entry->plan.patch_count * sizeof(u32),
+                         KSU_PATCH_TEXT_FLUSH_ICACHE);
+    if (ret)
+        pr_err("kpm: failed to restore 0x%llx (%d)\n", (unsigned long long)target, ret);
 
     kpm_free_exec(entry->trampoline, entry->trampoline_size);
     kfree(entry);
