@@ -426,8 +426,13 @@ pub fn lookup_symbols(names: &[&str]) -> Result<Vec<Option<u64>>> {
     Ok(result)
 }
 
-pub fn set_ksu_no_new_privs() -> anyhow::Result<()> {
-    let result = ksuctl(
+/// Issue one KPM control request. The kernel reports per-operation failures in
+/// `cmd.result` (negative errno) so that diagnostic text in `cmd.out` survives.
+pub fn kpm_ctl(cmd: &mut ksu_uapi::ksu_kpm_cmd) -> Result<i32> {
+    ksuctl(ksu_uapi::KSU_IOCTL_KPM, cmd)
+}
+
+pub fn set_ksu_no_new_privs() -> anyhow::Result<()> {    let result = ksuctl(
         ksu_uapi::KSU_IOCTL_DISABLE_ESCAPE_TO_ROOT,
         std::ptr::null_mut::<u8>(),
     )?;

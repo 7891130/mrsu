@@ -49,6 +49,10 @@ kernelsu-objs += selinux/sepolicy.o
 kernelsu-objs += sulog/event.o
 kernelsu-objs += sulog/fd.o
 
+kernelsu-objs += kpm/kpm_alloc.o
+kernelsu-objs += kpm/kpm_core.o
+kernelsu-objs += kpm/kpm_elf.o
+
 kernelsu-objs += supercall/dispatch.o
 kernelsu-objs += supercall/perm.o
 kernelsu-objs += supercall/supercall.o

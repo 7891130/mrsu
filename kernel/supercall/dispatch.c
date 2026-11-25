@@ -25,6 +25,7 @@
 #include "sulog/fd.h"
 #include "supercall/supercall.h"
 #include "infra/symbol_resolver.h"
+#include "kpm/kpm.h"
 #include "preinit/preinit.h"
 
 static int do_grant_root(void __user *arg)
@@ -801,6 +802,119 @@ out:
     return ret;
 }
 
+#define KPM_PATH_MAX 4096
+#define KPM_NAME_MAX 128
+#define KPM_TEXT_MAX 8192
+
+static int kpm_user_strdup(__aligned_u64 uptr, size_t max, char **out)
+{
+    char *buf;
+    long len;
+
+    *out = NULL;
+    if (!uptr || !max)
+        return 0;
+
+    buf = kzalloc(max, GFP_KERNEL);
+    if (!buf)
+        return -ENOMEM;
+
+    len = strncpy_from_user(buf, (const char __user *)uptr, max - 1);
+    if (len < 0) {
+        kfree(buf);
+        return (int)len;
+    }
+    *out = buf;
+    return 0;
+}
+
+/*
+ * KPM control. Unlike the other handlers this one reports operation failures
+ * through `cmd.result` (negative errno) instead of the ioctl return value, so
+ * that the optional diagnostic text in `out` still reaches userspace.
+ */
+static int do_kpm(void __user *arg)
+{
+    struct ksu_kpm_cmd cmd;
+    char *name = NULL, *path = NULL, *args = NULL;
+    char *text;
+    int ret;
+
+    if (copy_from_user(&cmd, arg, sizeof(cmd))) {
+        pr_err("kpm: copy_from_user failed\n");
+        return -EFAULT;
+    }
+    if (cmd.reserved)
+        return -EINVAL;
+
+    text = kzalloc(KPM_TEXT_MAX, GFP_KERNEL);
+    if (!text)
+        return -ENOMEM;
+    text[0] = '\0';
+
+    switch (cmd.op) {
+    case KSU_KPM_OP_LOAD:
+        ret = kpm_user_strdup(cmd.path, KPM_PATH_MAX, &path);
+        if (!ret)
+            ret = kpm_user_strdup(cmd.args, KPM_ARGS_MAX, &args);
+        if (!ret)
+            ret = kpm_load_path(path, args, text, KPM_TEXT_MAX);
+        break;
+    case KSU_KPM_OP_UNLOAD:
+        ret = kpm_user_strdup(cmd.name, KPM_NAME_MAX, &name);
+        if (!ret)
+            ret = kpm_unload(name);
+        break;
+    case KSU_KPM_OP_LIST:
+        ret = kpm_list(text, KPM_TEXT_MAX);
+        break;
+    case KSU_KPM_OP_INFO:
+        ret = kpm_user_strdup(cmd.name, KPM_NAME_MAX, &name);
+        if (!ret)
+            ret = kpm_info(name, text, KPM_TEXT_MAX);
+        break;
+    case KSU_KPM_OP_CTL0:
+        ret = kpm_user_strdup(cmd.name, KPM_NAME_MAX, &name);
+        if (!ret)
+            ret = kpm_user_strdup(cmd.args, KPM_ARGS_MAX, &args);
+        if (!ret)
+            ret = (int)kpm_ctl0(name, args, (char __user *)cmd.out, (int)cmd.out_len);
+        break;
+    case KSU_KPM_OP_CTL1:
+        ret = kpm_user_strdup(cmd.name, KPM_NAME_MAX, &name);
+        if (!ret)
+            ret = (int)kpm_ctl1(name, (void *)cmd.a1, (void *)cmd.a2, (void *)cmd.a3);
+        break;
+    default:
+        ret = -EINVAL;
+        break;
+    }
+
+    /* CTL0 answers straight into the user buffer the module was handed. */
+    if (cmd.out && cmd.out_len && cmd.op != KSU_KPM_OP_CTL0) {
+        size_t n = strlen(text);
+
+        if (n > cmd.out_len)
+            n = cmd.out_len;
+        if (n && copy_to_user((void __user *)cmd.out, text, n))
+            ret = -EFAULT;
+    }
+
+    cmd.result = (__u32)ret;
+
+    kfree(text);
+    kfree(name);
+    kfree(path);
+    kfree(args);
+
+    if (copy_to_user(arg, &cmd, sizeof(cmd))) {
+        pr_err("kpm: copy_to_user failed\n");
+        return -EFAULT;
+    }
+
+    return 0;
+}
+
 // IOCTL handlers mapping table
 // clang-format off
 static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
@@ -954,6 +1068,12 @@ static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
         .cmd = KSU_IOCTL_LOOKUP_SYMBOLS,
         .name = "LOOKUP_SYMBOLS",
         .handler = do_lookup_symbols,
+        .perm_check = only_root
+    },
+    {
+        .cmd = KSU_IOCTL_KPM,
+        .name = "KPM",
+        .handler = do_kpm,
         .perm_check = only_root
     },
     {

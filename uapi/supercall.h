@@ -11,7 +11,8 @@
 // 4: add KSU_GET_INFO_FLAG_BUNDLED
 // 5: add EVENT_SERVICES with a start/skip result
 // 6: add KSU_IOCTL_LOOKUP_SYMBOLS and KSU_GET_INFO_FLAG_PREINIT; modules.rc and preinit may live under /metadata/vold/ksu
-static const __u32 KERNEL_SU_UAPI_VERSION = 6;
+// 7: add KSU_IOCTL_KPM and KSU_FEATURE_KPM (KernelPatch module runtime)
+static const __u32 KERNEL_SU_UAPI_VERSION = 7;
 
 /* Magic numbers for reboot hook to install fd */
 static const __u32 KSU_INSTALL_MAGIC1 = 0xDEADBEEF;
@@ -172,6 +173,39 @@ struct ksu_lookup_symbols_cmd {
 
 static const __u32 KSU_LOOKUP_SYMBOLS_MAX = 1024;
 
+/*
+ * KPM (KernelPatch module) control.
+ *
+ * `op` selects the operation. `name` is the module name for UNLOAD/INFO/CTL,
+ * `path` is the .kpm file for LOAD. All pointers are user pointers and all
+ * strings are null-terminated. `out`/`out_len` receive module list or info
+ * text for LIST/INFO (and the ctl0 reply buffer for CTL0). `result` reports
+ * the byte count written to `out`, or an op-specific value.
+ */
+struct ksu_kpm_cmd {
+    __u32 op; /* Input: KSU_KPM_OP_* */
+    __u32 out_len; /* Input: size of `out` in bytes */
+    __aligned_u64 name; /* Input: module name (UNLOAD/INFO/CTL0/CTL1) */
+    __aligned_u64 path; /* Input: .kpm path (LOAD) */
+    __aligned_u64 args; /* Input: module args (LOAD) or ctl args (CTL0) */
+    __aligned_u64 out; /* Input: user reply buffer (LIST/INFO/CTL0) */
+    __aligned_u64 a1; /* Input: CTL1 argument 1 */
+    __aligned_u64 a2; /* Input: CTL1 argument 2 */
+    __aligned_u64 a3; /* Input: CTL1 argument 3 */
+    __u32 result; /* Output: bytes written / op result */
+    __u32 reserved; /* Input: must be 0 */
+};
+
+static const __u32 KSU_KPM_OP_LOAD = 1;
+static const __u32 KSU_KPM_OP_UNLOAD = 2;
+static const __u32 KSU_KPM_OP_LIST = 3;
+static const __u32 KSU_KPM_OP_INFO = 4;
+static const __u32 KSU_KPM_OP_CTL0 = 5;
+static const __u32 KSU_KPM_OP_CTL1 = 6;
+
+/* Upper bound on a .kpm image we accept, enforced by the kernel side. */
+static const __u32 KSU_KPM_MAX_IMAGE = 16 * 1024 * 1024;
+
 static const __u8 KSU_UMOUNT_WIPE = 0; /* ignore everything and wipe list */
 static const __u8 KSU_UMOUNT_ADD = 1; /* add entry (path + flags) */
 static const __u8 KSU_UMOUNT_DEL = 2; /* delete entry, strcmp */
@@ -205,5 +239,6 @@ static const __u32 KSU_IOCTL_SET_INIT_PGRP = _IO('K', 19);
 static const __u32 KSU_IOCTL_GET_SULOG_FD = _IOW('K', 20, struct ksu_get_sulog_fd_cmd);
 static const __u32 KSU_IOCTL_DISABLE_ESCAPE_TO_ROOT = _IO('K', 21);
 static const __u32 KSU_IOCTL_LOOKUP_SYMBOLS = _IOW('K', 22, struct ksu_lookup_symbols_cmd);
+static const __u32 KSU_IOCTL_KPM = _IOWR('K', 23, struct ksu_kpm_cmd);
 
 #endif

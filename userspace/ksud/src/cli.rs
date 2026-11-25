@@ -9,8 +9,8 @@ use crate::boot_patch::{BootPatchArgs, BootRestoreArgs};
 use crate::lkm_image::BootPatchV2Args;
 use crate::module::regenerate_preinit;
 use crate::{
-    apk_sign, assets, debug, defs, init_event, ksu_uapi, ksucalls, module, module_config, sulog,
-    utils,
+    apk_sign, assets, debug, defs, init_event, kpm, ksu_uapi, ksucalls, module, module_config,
+    sulog, utils,
 };
 
 /// KernelSU userspace cli
@@ -19,6 +19,45 @@ use crate::{
 struct Args {
     #[command(subcommand)]
     command: Commands,
+}
+
+#[derive(clap::Subcommand, Debug)]
+enum Kpm {
+    /// Load a .kpm image into the kernel (temporary, lost on reboot)
+    Load {
+        /// module path
+        module: PathBuf,
+        /// module arguments passed to the .kpm.init entry
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true, num_args = 0..)]
+        args: Vec<String>,
+    },
+    /// Unload a loaded .kpm image by name
+    Unload {
+        /// module name
+        name: String,
+    },
+    /// List loaded .kpm images
+    List,
+    /// Show details of a loaded .kpm image
+    Info {
+        /// module name
+        name: String,
+    },
+    /// Run the module's ctl0 command
+    Ctl0 {
+        /// module name
+        name: String,
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true, num_args = 0..)]
+        args: Vec<String>,
+    },
+    /// Run the module's raw ctl1 command
+    Ctl1 {
+        /// module name
+        name: String,
+        a1: u64,
+        a2: u64,
+        a3: u64,
+    },
 }
 
 #[derive(clap::Subcommand, Debug)]
@@ -75,6 +114,12 @@ enum Commands {
         /// module load parameters (e.g. key=val key2=val2)
         #[arg(trailing_var_arg = true, allow_hyphen_values = true, num_args = 0..)]
         params: Vec<String>,
+    },
+
+    /// Manage KernelPatch modules (.kpm)
+    Kpm {
+        #[command(subcommand)]
+        command: Kpm,
     },
 
     /// Install KernelSU userspace component to system
@@ -537,6 +582,22 @@ pub fn run() -> Result<()> {
         Commands::SoftReboot => crate::soft_reboot::soft_reboot(),
 
         Commands::Insmod { module, params } => debug::insmod(&module, &params),
+
+        Commands::Kpm { command } => match command {
+            Kpm::Load { module, args } => {
+                let args = if args.is_empty() {
+                    None
+                } else {
+                    Some(args.join(" "))
+                };
+                kpm::load(&module, args.as_deref())
+            }
+            Kpm::Unload { name } => kpm::unload(&name),
+            Kpm::List => kpm::list(),
+            Kpm::Info { name } => kpm::info(&name),
+            Kpm::Ctl0 { name, args } => kpm::ctl0(&name, &args.join(" ")),
+            Kpm::Ctl1 { name, a1, a2, a3 } => kpm::ctl1(&name, a1, a2, a3).map(|_| ()),
+        },
 
         Commands::Module { command } => {
             utils::switch_mnt_ns(1)?;
