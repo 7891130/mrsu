@@ -84,6 +84,18 @@ int kpm_hook_install(u64 target, u64 replacement, const char *owner, char *err, 
         goto out_free_trampoline;
     }
 
+    /*
+     * ksu_patch_text() writes through a single fixmap page, so a patch that
+     * straddles a page boundary would touch an unmapped address. Entry points
+     * rarely sit that close to the end of a page, but refusing is cheaper than
+     * corrupting one.
+     */
+    if (((u32)target & ~(u32)PAGE_MASK) + entry->plan.patch_count * (u32)sizeof(u32) > PAGE_SIZE) {
+        set_err(err, err_len, "patch would cross a page boundary");
+        ret = -ERANGE;
+        goto out_free_trampoline;
+    }
+
     memcpy(entry->trampoline, entry->plan.trampoline, entry->plan.trampoline_count * sizeof(u32));
     kpm_protect_exec(entry->trampoline, tramp_size);
 

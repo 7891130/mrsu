@@ -1,0 +1,94 @@
+# KPM 运行时（KernelPatch module）
+
+MRSU 在 KernelSU 之上实现了一套 KernelPatch Module（`.kpm`）运行时，目标是能直接加载
+为 kpatch 编译的模块，同时保持 KernelSU 自己的功能不受影响。
+
+> 状态：代码完整、纯逻辑部分有 229 项宿主机单元测试；**内核侧尚未经过编译器与真机验证**。
+> 本文最后一段是上机自检清单。
+
+## 模块格式
+
+`.kpm` 是 **aarch64 ET_REL** 可重定位 ELF（不是 `.ko`，`finit_module` 加载不了）。
+入口靠段名约定，与 kpatch 一致：
+
+| 段 | 作用 |
+|---|---|
+| `.kpm.init` | 加载时调用，签名 `long (*)(const char *args, const char *event, void *reserved)` |
+| `.kpm.exit` | 卸载时调用，`long (*)(void *reserved)` |
+| `.kpm.info` | `name=/version=/license=/author=/description=` 字符串 |
+| `.kpm.ctl0` / `.kpm.ctl1` | 可选控制入口 |
+| `.kpm.event` | 可选，接收运行时事件 |
+
+## 加载流程
+
+1. `ksud kpm load <file>` → `KSU_IOCTL_KPM`（uapi 7）；
+2. 内核校验 ELF 头（ET_REL / AArch64 / 段表边界）；
+3. 段布局：text → RO → RW，边界按页对齐（text 页最后置只读）；
+4. 用 `module_alloc` 拿可执行内存，拷贝段；
+5. 符号简化：未定义符号先查 kfunc 表，再回落 `find_kernel_symbol_exact`（kallsyms，含非导出符号）；
+6. AArch64 RELA 重定位（与 `arch/arm64/kernel/module.c` 同源，私有的
+   `aarch64_insn_encode_immediate` 实现）；
+7. icache 刷新、text 置只读；
+8. 调用 `.kpm.init`；失败则调 `.kpm.exit` 并回收。
+
+## 已提供的 kfunc（16 个）
+
+`symbol_lookup_name`、`kallsyms_lookup_name`、`compat_copy_to_user`（**返回已拷贝长度**，失败返回 0）、
+`compat_strncpy_from_user`、`current_uid`、`kp_symbol_count`、`kp_symbol_list`、
+`kp_feature_list`、`kver`（数据符号）、`hook`、`unhook`、`fp_hook`、`fp_unhook`。
+
+`hook()` 的返回值是 kpatch 的 `hook_err_t`（0 / 4095 / 4094 / 4093 / 4092），
+不是内核 errno。
+
+没实现（模块引用会以 unknown symbol 失败，属预期）：`hook_wrap`/`hook_unwrap`/
+`hook_chain_*`、`syscall*` 系列、`kp_btf_*`/`kp_kconfig_*`，以及 APatch 专属的
+`su_*`/`kstorage_*`/`ap_mod_*`。
+
+## 用法
+
+```bash
+ksud kpm load /data/adb/kpm/foo.kpm          # 临时加载（重启失效）
+ksud kpm list                                 # 已加载列表
+ksud kpm info <name>                          # 详情
+ksud kpm unload <name>                        # 卸载
+ksud kpm stage /path/to/foo.kpm               # 放入 /data/adb/kpm，开机自动加载
+ksud kpm unstage foo.kpm                      # 取消开机加载
+ksud kpm staged                               # 开机清单
+ksud kpm autoload                             # 手动触发（post-fs-data 已自动调用）
+ksud kpm ctl0 <name> <args...>                # 模块自定义控制
+```
+
+管理器里：设置 → KernelPatch modules。
+
+## 上机自检清单（M6）
+
+按顺序做，每步先看 `dmesg | grep -i kpm`。
+
+1. **模块镜像能否分配可执行内存**
+   `kpm: loaded <name> (<version>)` 出现即通过。
+   失败 `cannot allocate executable memory` → `module_alloc` 符号未解析或权限不足。
+
+2. **trampoline 距离**（关键，宿主机无法验证）
+   在模块里 hook 一个序言含 `b.cond`/`cbz` 的函数。
+   若报 `cannot build a hook for this function`（`-ERANGE`），说明
+   `module_alloc` 返回的模块区距离内核正文超过 ±1MB。
+   对策：换 trampoline 分配策略（目标附近空洞分配，或改用绝对跳转形式）。
+
+3. **文本改写**
+   `kpm: hooked 0x… -> 0x… (N-insn patch)` 出现，且目标函数行为确实改变。
+   注意：补丁走 `ksu_patch_text`（内部 `stop_machine`），**必须一次调用写完整块**。
+
+4. **卸载还原**
+   `ksud kpm unload` 后原函数行为恢复，且不崩。
+   （曾有一个逐条恢复的 bug：会留下"原第一条 + 跳转尾巴"，已修）
+
+5. **开机自动加载**
+   `/data/adb/kpm/*.kpm` 在 post-fs-data 被加载；安全模式下**不加载**。
+
+6. **失败诊断**
+   故意加载一个引用不存在符号的模块，界面/CLI 应显示
+   `unknown symbol: xxx`（而不是笼统失败）。
+
+7. **回归**
+   `selinux_hide`、`su`、模块挂载等既有功能不受影响；
+   内核日志无 `kpm:` 以外的异常。
