@@ -7,6 +7,7 @@
  * host (see _vendor/kpm-hosttest/test_insn.c).
  */
 #include <linux/kernel.h>
+#include <linux/errno.h>
 #include <linux/types.h>
 
 #include "kpm/kpm_insn.h"

@@ -1,4 +1,5 @@
 #include <linux/err.h>
+#include <linux/errno.h>
 #include <linux/file.h>
 #include <linux/fs.h>
 #include <linux/kernel.h>

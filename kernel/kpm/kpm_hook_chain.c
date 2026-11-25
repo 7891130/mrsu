@@ -7,6 +7,7 @@
  * so that a module can rely on a single sequence.
  */
 #include <linux/kernel.h>
+#include <linux/errno.h>
 #include <linux/string.h>
 #include <linux/types.h>
 

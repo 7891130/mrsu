@@ -5,6 +5,7 @@
  * Pure bookkeeping: no text patching, no cache maintenance, no allocation.
  */
 #include <linux/kernel.h>
+#include <linux/errno.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
 #include <linux/string.h>

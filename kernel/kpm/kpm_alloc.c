@@ -1,4 +1,5 @@
 #include <linux/kernel.h>
+#include <linux/errno.h>
 #include <linux/mutex.h>
 #include <linux/mm.h>
 #include <linux/types.h>

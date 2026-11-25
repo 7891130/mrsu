@@ -1,5 +1,6 @@
 #include <linux/cred.h>
 #include <linux/kernel.h>
+#include <linux/errno.h>
 #include <linux/sched.h>
 #include <linux/string.h>
 #include <linux/types.h>
