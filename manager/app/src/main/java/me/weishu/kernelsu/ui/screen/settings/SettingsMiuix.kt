@@ -22,6 +22,7 @@ import androidx.compose.material.icons.rounded.BugReport
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.DeveloperMode
+import androidx.compose.material.icons.rounded.Extension
 import androidx.compose.material.icons.rounded.DisplaySettings
 import androidx.compose.material.icons.rounded.FlashOn
 import androidx.compose.material.icons.rounded.Info
@@ -185,6 +186,20 @@ fun SettingPagerMiuix(
                                 .padding(top = 12.dp)
                                 .fillMaxWidth(),
                         ) {
+                        val kpmTitle = stringResource(id = R.string.settings_kpm)
+                        ArrowPreference(
+                            title = kpmTitle,
+                            summary = stringResource(id = R.string.settings_kpm_summary),
+                            startAction = {
+                                Icon(
+                                    Icons.Rounded.Extension,
+                                    modifier = Modifier.padding(end = 6.dp),
+                                    contentDescription = kpmTitle,
+                                    tint = colorScheme.onBackground
+                                )
+                            },
+                            onClick = actions.onOpenKpm
+                        )
                             val profileTemplate = stringResource(id = R.string.settings_profile_template)
                             ArrowPreference(
                                 title = profileTemplate,

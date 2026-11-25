@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.DeveloperMode
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.DisplaySettings
 import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material.icons.filled.Info
@@ -150,6 +151,26 @@ fun SettingPagerMaterial(
                 }
             )
 
+            val kpmTitle = stringResource(id = R.string.settings_kpm)
+            KsuIsValid {
+                SegmentedColumn(
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 13.dp),
+                    content = listOf {
+                        SegmentedListItem(
+                            onClick = actions.onOpenKpm,
+                            headlineContent = { Text(kpmTitle) },
+                            supportingContent = { Text(stringResource(id = R.string.settings_kpm_summary)) },
+                            leadingContent = { Icon(Icons.Filled.Extension, kpmTitle) },
+                            trailingContent = {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                    null
+                                )
+                            }
+                        )
+                    }
+                )
+            }
             val profileTemplate = stringResource(id = R.string.settings_profile_template)
             KsuIsValid {
                 SegmentedColumn(

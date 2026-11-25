@@ -392,6 +392,8 @@
     <string name="script_param_invalid">Invalid value</string>
     <string name="home_author">作者：明小日</string>
     <string name="kpm_title">KernelPatch modules</string>
+    <string name="settings_kpm">KernelPatch modules</string>
+    <string name="settings_kpm_summary">Load .kpm modules, temporarily or at boot</string>
     <string name="kpm_loaded">Loaded</string>
     <string name="kpm_empty">No kernel patch module loaded.</string>
     <string name="kpm_staged">Staged for boot</string>
