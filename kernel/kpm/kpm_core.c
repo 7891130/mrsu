@@ -108,10 +108,9 @@ int kpm_load_path(const char *path, const char *args, char *err, size_t err_len)
         goto out_free;
     }
 
-    ret = kpm_elf_load(mod, buf, size, args);
+    ret = kpm_elf_load(mod, buf, size, args, err, err_len);
     if (ret) {
-        /* kpm_elf_load is expected to leave a useful message in mod->name */
-        kpm_set_err(err, err_len, mod->name[0] ? mod->name : "load module failed");
+        kfree(mod->args);
         kfree(mod);
         goto out_free;
     }

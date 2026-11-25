@@ -65,8 +65,8 @@ void *kpm_alloc_exec(size_t size);
 int kpm_protect_exec(void *addr, size_t size);
 void kpm_free_exec(void *addr, size_t size);
 
-/* ELF loader: fills mod from a validated .kpm image in kernel memory */
-int kpm_elf_load(struct kpm_module *mod, const void *data, size_t len, const char *args);
+/* ELF loader: fills mod from a validated .kpm image already in kernel memory */
+int kpm_elf_load(struct kpm_module *mod, const void *data, size_t len, const char *args, char *err, size_t err_len);
 void kpm_elf_release(struct kpm_module *mod);
 
 /* module table operations (called from the supercall dispatcher) */
