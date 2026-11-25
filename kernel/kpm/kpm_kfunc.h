@@ -2,6 +2,7 @@
 #define __KSU_H_KPM_KFUNC
 
 #include <linux/types.h>
+#include <linux/uaccess.h> /* __user */
 
 /*
  * The subset of KernelPatch's kfunc API that this runtime implements.
