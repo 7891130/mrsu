@@ -186,6 +186,34 @@ private suspend fun readFeatureValue(args: String): Long? = withContext(Dispatch
     valueLine.substringAfter("Value:").trim().toLongOrNull()
 }
 
+// ---- KPM (KernelPatch modules) -------------------------------------------
+
+/** Single-quote an argument for the root shell. */
+private fun shellQuote(value: String): String = "'" + value.replace("'", "'\\''") + "'"
+
+/** Loaded modules: "name<TAB>version<TAB>args" per line, empty when none. */
+fun kpmList(): String {
+    val shell = getRootShell()
+    val out = shell.newJob()
+        .add("${getKsuDaemonPath()} kpm list").to(ArrayList<String>(), null).exec().out
+    return out.joinToString("\n").trim()
+}
+
+/** Modules staged for boot: one file name per line. */
+fun kpmStaged(): String {
+    val shell = getRootShell()
+    val out = shell.newJob()
+        .add("${getKsuDaemonPath()} kpm staged").to(ArrayList<String>(), null).exec().out
+    return out.joinToString("\n").trim()
+}
+
+fun kpmLoad(path: String): Boolean = execKsud("kpm load ${shellQuote(path)}")
+
+fun kpmUnload(name: String): Boolean = execKsud("kpm unload ${shellQuote(name)}")
+
+fun kpmStage(path: String): Boolean = execKsud("kpm stage ${shellQuote(path)}")
+
+fun kpmUnstage(name: String): Boolean = execKsud("kpm unstage ${shellQuote(name)}")
 fun install() {
     val start = SystemClock.elapsedRealtime()
     val libadbroot = File(ksuApp.applicationInfo.nativeLibraryDir, "libadbroot.so").absolutePath
