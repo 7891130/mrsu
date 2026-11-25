@@ -10,7 +10,7 @@
  * kernel symbol by name -- including the ones that are not EXPORT_SYMBOL'd,
  * which kpm modules commonly import.
  */
-unsigned long kpm_symbol_lookup(const char *name);
+u64 kpm_symbol_lookup(const char *name);
 
 /* Introspection for the kp_symbol_count/kp_symbol_list kfuncs. */
 int kpm_symbol_count(void);

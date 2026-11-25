@@ -155,7 +155,7 @@ static int kpm_prepare(struct kpm_load_info *li)
                 return -ENOEXEC;
             }
             /* Non-allocated sections keep pointing into the source image. */
-            s->sh_addr = (unsigned long)(li->data + s->sh_offset);
+            s->sh_addr = (u64)(uintptr_t)(li->data + s->sh_offset);
         } else {
             s->sh_addr = 0;
         }
@@ -268,7 +268,7 @@ static int kpm_write_image(struct kpm_load_info *li, struct kpm_module *mod)
         dest = (char *)mod->image + s->sh_entsize;
         if (s->sh_type != SHT_NOBITS && s->sh_size)
             memcpy(dest, (void *)s->sh_addr, s->sh_size);
-        s->sh_addr = (unsigned long)dest;
+        s->sh_addr = (u64)(uintptr_t)dest;
     }
 
     return 0;
@@ -286,7 +286,7 @@ static int kpm_simplify_symbols(struct kpm_load_info *li, struct kpm_module *mod
 
         switch (sym[i].st_shndx) {
         case SHN_UNDEF: {
-            unsigned long addr = kpm_symbol_lookup(name);
+            u64 addr = kpm_symbol_lookup(name);
 
             if (!addr) {
                 if (li->err && li->err_len)
@@ -454,7 +454,7 @@ int kpm_elf_load(struct kpm_module *mod, const void *data, size_t len, const cha
         goto out_release_image;
 
     if (li.text_size)
-        kpm_flush_icache((unsigned long)mod->image, (unsigned long)mod->image + li.text_size);
+        kpm_flush_icache((uintptr_t)mod->image, (uintptr_t)mod->image + li.text_size);
 
     kpm_bind_entries(&li, mod);
 

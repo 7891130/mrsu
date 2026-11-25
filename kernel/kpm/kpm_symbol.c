@@ -34,7 +34,7 @@ static const struct kpm_kfunc kpm_kfuncs[] = {
     { .name = "kver", .addr = (unsigned long)&kpm_kver },
 };
 
-unsigned long kpm_symbol_lookup(const char *name)
+u64 kpm_symbol_lookup(const char *name)
 {
     unsigned int i;
 
@@ -46,7 +46,7 @@ unsigned long kpm_symbol_lookup(const char *name)
             return kpm_kfuncs[i].addr;
     }
 
-    return find_kernel_symbol_exact(name);
+    return (u64)find_kernel_symbol_exact(name);
 }
 
 int kpm_symbol_count(void)
