@@ -132,3 +132,29 @@ ksud kpm doctor                               # 排障：接口/feature/ioctl/�
 - trampoline 必须落在目标 ±1MB 内（被顶掉的 `b.cond`/`cbz` 位移限制），
   否则 `kpm_hook_build()` 返回 `-ERANGE`；
 - `kpm_notify_event()` 尚未接入 KSU 的启动事件。
+
+## 运行期解析符号的版本可用性
+
+本运行时不通过导出符号表链接内核函数，而是用 `find_kernel_symbol_exact()` 按名字从
+kallsyms 里找。好处是能调用非导出函数，代价是**编译器完全不参与检查**——名字不存在
+只会在运行期暴露，且只出现在缺它的那几档 KMI 上。
+
+因此每新增一个解析符号，都必须先核对它在目标内核上的存在性：
+
+| 符号 | 5.10 | 6.12 | 备注 |
+|---|---|---|---|
+| `module_alloc` | 有 | **无** | 6.10 起移除 |
+| `module_memfree` | 有 | **无** | 同上 |
+| `execmem_alloc` | 无 | 有 | 6.10 起取代 module_alloc |
+| `execmem_free` | 无 | 有 | 同上 |
+| `set_memory_ro` | 有 | 有 | 签名 `(unsigned long, int)` 未变 |
+| `set_memory_rw` / `set_memory_x` | 有 | 有 | 备用 |
+| `vmalloc` / `vfree` | 有 | 有 | 标准导出 |
+
+`kpm_alloc_exec()` 因此先探 `module_alloc`，失败回退 `execmem_alloc(EXECMEM_MODULE_TEXT=1, size)`，
+释放时对应回退。若两者都没有，加载会以
+`neither module_alloc nor execmem_alloc is available` 明确失败。
+
+> 这张表就是"为什么必须做版本核对"的实例：`module_alloc` 的消失发生在 6.10，
+> 而 android16-6.12 / android17-6.18 都在支持矩阵里。编译与 CI 都不会报错，
+> 只有真机运行才会暴露。
