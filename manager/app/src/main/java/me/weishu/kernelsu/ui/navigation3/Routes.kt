@@ -47,6 +47,11 @@ sealed interface Route : NavKey, Parcelable {
     @Serializable
     data object Sulog : Route
 
+    /** KernelPatch modules (.kpm) */
+    @Parcelize
+    @Serializable
+    data object Kpm : Route
+
     @Parcelize
     @Serializable
     data object ColorPalette : Route

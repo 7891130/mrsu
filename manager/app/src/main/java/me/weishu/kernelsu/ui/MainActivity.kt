@@ -1,4 +1,4 @@
-﻿package me.weishu.kernelsu.ui
+package me.weishu.kernelsu.ui
 
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -92,6 +92,7 @@ import me.weishu.kernelsu.ui.screen.modulerepo.ModuleRepoDetailScreen
 import me.weishu.kernelsu.ui.screen.modulerepo.ModuleRepoScreen
 import me.weishu.kernelsu.ui.screen.scriptrun.ScriptRunScreen
 import me.weishu.kernelsu.ui.screen.settings.SettingPager
+import me.weishu.kernelsu.ui.screen.kpm.KpmScreen
 import me.weishu.kernelsu.ui.screen.sulog.SulogScreen
 import me.weishu.kernelsu.ui.screen.superuser.SuperUserPager
 import me.weishu.kernelsu.ui.screen.template.AppProfileTemplateScreen
@@ -262,6 +263,7 @@ class MainActivity : ComponentActivity() {
                             entry<Route.Main>(swipeDismiss = swipeDismiss) { pageBackground { mainScreenEntry() } }
                             entry<Route.About>(swipeDismiss = swipeDismiss) { pageBackground { AboutScreen() } }
                             entry<Route.Sulog>(swipeDismiss = swipeDismiss) { pageBackground { SulogScreen() } }
+                            entry<Route.Kpm>(swipeDismiss = swipeDismiss) { pageBackground { KpmScreen() } }
                             entry<Route.ColorPalette>(swipeDismiss = swipeDismiss) { pageBackground { ColorPaletteScreen() } }
                             entry<Route.BackgroundCrop>(swipeDismiss = swipeDismiss) { key -> pageBackground { BackgroundCropScreen(key.uri) } }
                             entry<Route.AppProfileTemplate>(swipeDismiss = swipeDismiss) { pageBackground { AppProfileTemplateScreen() } }

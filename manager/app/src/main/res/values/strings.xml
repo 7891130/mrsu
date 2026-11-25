@@ -391,4 +391,12 @@
     <string name="script_param_above_max">Must be at most %d</string>
     <string name="script_param_invalid">Invalid value</string>
     <string name="home_author">作者：明小日</string>
+    <string name="kpm_title">KernelPatch modules</string>
+    <string name="kpm_loaded">Loaded</string>
+    <string name="kpm_empty">No kernel patch module loaded.</string>
+    <string name="kpm_staged">Staged for boot</string>
+    <string name="kpm_staged_empty">Nothing staged.</string>
+    <string name="kpm_refresh">Refresh</string>
+    <string name="kpm_unstage">Remove from boot</string>
+    <string name="kpm_note">Temporary modules are lost on reboot; staged ones load at boot. Load file comes next.</string>
 </resources>
