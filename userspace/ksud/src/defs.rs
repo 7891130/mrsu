@@ -30,6 +30,8 @@ mod android {
     pub const MODULE_DIR: &str = concatcp!(ADB_DIR, "modules/");
     pub const MODULE_UPDATE_DIR: &str = concatcp!(ADB_DIR, "modules_update/");
     pub const METAMODULE_DIR: &str = concatcp!(ADB_DIR, "metamodule/");
+    // .kpm images staged here are loaded on every boot by ksud
+    pub const KPM_DIR: &str = concatcp!(ADB_DIR, "kpm/");
     // Replaced module dirs are parked here until the next boot
     pub const HOT_INSTALL_TRASH_DIR: &str = concatcp!(WORKING_DIR, "hot_install_trash/");
 

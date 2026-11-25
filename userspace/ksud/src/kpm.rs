@@ -2,9 +2,10 @@
 
 use anyhow::{Context, Result, bail};
 use std::ffi::CString;
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
 
-use crate::{ksu_uapi, ksucalls};
+use crate::{defs, ksu_uapi, ksucalls};
 
 const OUT_BUF: usize = 8192;
 
@@ -177,4 +178,111 @@ pub fn ctl1(name: &str, a1: u64, a2: u64, a3: u64) -> Result<i64> {
     }
     println!("ctl1 returned {rc}");
     Ok(rc)
+}
+
+/// Load every `.kpm` staged in `defs::KPM_DIR`, in file-name order.
+///
+/// Called from the post-fs-data stage so staged modules come back on every
+/// boot. One failing module must not stop the others: their failures are
+/// reported and counted, and the caller only logs the summary.
+pub fn autoload() -> Result<()> {
+    let dir = Path::new(defs::KPM_DIR);
+    if !dir.is_dir() {
+        return Ok(());
+    }
+
+    let mut images: Vec<PathBuf> = fs::read_dir(dir)
+        .with_context(|| format!("read {} failed", dir.display()))?
+        .flatten()
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.is_file()
+                && path
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("kpm"))
+        })
+        .collect();
+
+    if images.is_empty() {
+        return Ok(());
+    }
+    images.sort();
+
+    let mut failed = 0usize;
+    for image in &images {
+        match load(image, None) {
+            Ok(()) => {}
+            Err(e) => {
+                failed += 1;
+                println!("Failed to load {}: {e:#}", image.display());
+            }
+        }
+    }
+
+    if failed > 0 {
+        bail!("{failed} of {} staged kpm module(s) failed", images.len());
+    }
+    Ok(())
+}
+
+/// Copy a `.kpm` into `defs::KPM_DIR` so it is loaded on every boot.
+pub fn stage(path: &Path) -> Result<()> {
+    let name = path
+        .file_name()
+        .with_context(|| format!("invalid module path: {}", path.display()))?
+        .to_owned();
+    if !path.is_file() {
+        bail!("not a file: {}", path.display());
+    }
+    fs::create_dir_all(defs::KPM_DIR)
+        .with_context(|| format!("create {} failed", defs::KPM_DIR))?;
+    let dest = Path::new(defs::KPM_DIR).join(&name);
+    fs::copy(path, &dest).with_context(|| format!("copy to {} failed", dest.display()))?;
+    println!("Staged {} for autoload", dest.display());
+    Ok(())
+}
+
+/// Forget a staged module; the loaded image (if any) stays until unloaded.
+pub fn unstage(name: &str) -> Result<()> {
+    let file_name = if name.ends_with(".kpm") {
+        name.to_owned()
+    } else {
+        format!("{name}.kpm")
+    };
+    let path = Path::new(defs::KPM_DIR).join(&file_name);
+    if !path.is_file() {
+        bail!("no staged module named {file_name}");
+    }
+    fs::remove_file(&path).with_context(|| format!("remove {} failed", path.display()))?;
+    println!("Removed staged module {file_name}");
+    Ok(())
+}
+
+/// List the staged modules without asking the kernel.
+pub fn list_staged() -> Result<()> {
+    let dir = Path::new(defs::KPM_DIR);
+    if !dir.is_dir() {
+        println!("No staged kpm module.");
+        return Ok(());
+    }
+    let mut names: Vec<String> = fs::read_dir(dir)?
+        .flatten()
+        .filter(|entry| {
+            entry.path().is_file()
+                && entry
+                    .path()
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("kpm"))
+        })
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    if names.is_empty() {
+        println!("No staged kpm module.");
+        return Ok(());
+    }
+    names.sort();
+    for name in names {
+        println!("{name}");
+    }
+    Ok(())
 }

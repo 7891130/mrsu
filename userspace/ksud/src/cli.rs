@@ -58,6 +58,20 @@ enum Kpm {
         a2: u64,
         a3: u64,
     },
+    /// Load every .kpm staged in /data/adb/kpm
+    Autoload,
+    /// Copy a .kpm into /data/adb/kpm so it is loaded on every boot
+    Stage {
+        /// module path
+        module: PathBuf,
+    },
+    /// Stop loading a staged .kpm on boot
+    Unstage {
+        /// module file name or module name
+        name: String,
+    },
+    /// List the .kpm images staged for boot
+    Staged,
 }
 
 #[derive(clap::Subcommand, Debug)]
@@ -597,6 +611,10 @@ pub fn run() -> Result<()> {
             Kpm::Info { name } => kpm::info(&name),
             Kpm::Ctl0 { name, args } => kpm::ctl0(&name, &args.join(" ")),
             Kpm::Ctl1 { name, a1, a2, a3 } => kpm::ctl1(&name, a1, a2, a3).map(|_| ()),
+            Kpm::Autoload => kpm::autoload(),
+            Kpm::Stage { module } => kpm::stage(&module),
+            Kpm::Unstage { name } => kpm::unstage(&name),
+            Kpm::Staged => kpm::list_staged(),
         },
 
         Commands::Module { command } => {

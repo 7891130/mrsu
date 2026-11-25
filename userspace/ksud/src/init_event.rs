@@ -97,6 +97,11 @@ pub fn on_post_fs_data() -> Result<()> {
         warn!("init features failed: {e}");
     }
 
+    // Kernel patch modules are third-party kernel code; safe mode returned already.
+    if let Err(e) = crate::kpm::autoload() {
+        warn!("kpm autoload failed: {e:#}");
+    }
+
     // execute metamodule post-fs-data script first (priority)
     if let Err(e) = metamodule::exec_stage_script("post-fs-data", wait) {
         warn!("exec metamodule post-fs-data script failed: {e}");

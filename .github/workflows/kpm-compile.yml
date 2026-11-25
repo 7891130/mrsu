@@ -9,14 +9,10 @@ name: KPM compile check
 # be validated independently of the artifact plumbing.
 
 on:
+  # Manual only for now: the account's Actions minutes are exhausted, so a push
+  # trigger would only produce red runs. Re-add a push trigger (or point
+  # runs-on at the self-hosted runner label) once a free runner is available.
   workflow_dispatch:
-  push:
-    branches:
-      - 'feat/**'
-    paths:
-      - 'kernel/**'
-      - 'uapi/**'
-      - '.github/workflows/kpm-compile.yml'
 
 concurrency:
   group: kpm-compile-${{ github.ref }}
