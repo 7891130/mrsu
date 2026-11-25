@@ -295,3 +295,48 @@ int kpm_insn_retarget(u32 insn, u64 old_pc, u64 new_pc, u32 *out)
     *out = rewritten;
     return 0;
 }
+
+u32 kpm_insn_gen_ldstp_mode(u8 rt, u8 rt2, u8 rn, s64 offset, bool is64, bool load, enum kpm_ldst_mode mode)
+{
+    s64 scale = is64 ? 8 : 4;
+    u32 base;
+
+    if (offset % scale)
+        return 0;
+    if (offset / scale < -64 || offset / scale > 63)
+        return 0;
+
+    /* Bits 24..23 select the addressing mode; the pair encodings differ. */
+    if (is64) {
+        switch (mode) {
+        case KPM_LDST_OFFSET:
+            base = load ? 0xa9400000u : 0xa9000000u;
+            break;
+        case KPM_LDST_POST_INDEX:
+            base = load ? 0xa8c00000u : 0xa8800000u;
+            break;
+        case KPM_LDST_PRE_INDEX:
+            base = load ? 0xa9c00000u : 0xa9800000u;
+            break;
+        default:
+            return 0;
+        }
+    } else {
+        switch (mode) {
+        case KPM_LDST_OFFSET:
+            base = load ? 0x29400000u : 0x29000000u;
+            break;
+        case KPM_LDST_POST_INDEX:
+            base = load ? 0x28c00000u : 0x28800000u;
+            break;
+        case KPM_LDST_PRE_INDEX:
+            base = load ? 0x29c00000u : 0x29800000u;
+            break;
+        default:
+            return 0;
+        }
+    }
+
+    return base | (((u32)((offset / scale) & 0x7f)) << 15) | ((u32)(rt2 & 0x1f) << 10) | ((u32)(rn & 0x1f) << 5) |
+           (rt & 0x1f);
+}

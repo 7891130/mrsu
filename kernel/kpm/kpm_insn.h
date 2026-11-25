@@ -44,6 +44,16 @@ u32 kpm_insn_gen_add_sub_imm(u8 rd, u8 rn, s64 imm, bool is64, bool sub);
 u32 kpm_insn_gen_movewide(u8 rd, u16 imm, u8 shift, bool is64, bool movk);
 u32 kpm_insn_gen_mov_reg(u8 rd, u8 rm, bool is64);
 u32 kpm_insn_gen_ldstp(u8 rt, u8 rt2, u8 rn, s64 offset, bool is64, bool load);
+
+/* Addressing mode for the pair instructions. */
+enum kpm_ldst_mode {
+    KPM_LDST_OFFSET = 0,
+    KPM_LDST_POST_INDEX = 1,
+    KPM_LDST_PRE_INDEX = 2,
+};
+
+/* Same as kpm_insn_gen_ldstp but with an explicit addressing mode. */
+u32 kpm_insn_gen_ldstp_mode(u8 rt, u8 rt2, u8 rn, s64 offset, bool is64, bool load, enum kpm_ldst_mode mode);
 u32 kpm_insn_gen_ldst_imm(u8 rt, u8 rn, u16 offset, bool is64, bool load);
 
 /* Classification. */
