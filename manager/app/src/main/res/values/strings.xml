@@ -400,5 +400,8 @@
     <string name="kpm_staged_empty">Nothing staged.</string>
     <string name="kpm_refresh">Refresh</string>
     <string name="kpm_unstage">Remove from boot</string>
-    <string name="kpm_note">Temporary modules are lost on reboot; staged ones load at boot. Load file comes next.</string>
+    <string name="kpm_load_now">Load now</string>
+    <string name="kpm_stage_for_boot">Add to boot</string>
+    <string name="kpm_last_result">Last result</string>
+    <string name="kpm_note">Temporary modules are lost on reboot; staged ones load at boot.</string>
 </resources>

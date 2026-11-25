@@ -214,6 +214,21 @@ fun kpmUnload(name: String): Boolean = execKsud("kpm unload ${shellQuote(name)}"
 fun kpmStage(path: String): Boolean = execKsud("kpm stage ${shellQuote(path)}")
 
 fun kpmUnstage(name: String): Boolean = execKsud("kpm unstage ${shellQuote(name)}")
+/** Run a ksud command and return its combined stdout/stderr, for display. */
+private fun runKsud(args: String): String {
+    val shell = getRootShell()
+    val out = ArrayList<String>()
+    val err = ArrayList<String>()
+    shell.newJob().add("${getKsuDaemonPath()} $args").to(out, err).exec()
+    return (out + err).joinToString("\n").trim()
+}
+
+/** Load a .kpm and return the runtime's report (diagnostics included). */
+fun kpmLoadReport(path: String): String = runKsud("kpm load ${shellQuote(path)}")
+
+/** Stage a .kpm for boot and return the report. */
+fun kpmStageReport(path: String): String = runKsud("kpm stage ${shellQuote(path)}")
+
 fun install() {
     val start = SystemClock.elapsedRealtime()
     val libadbroot = File(ksuApp.applicationInfo.nativeLibraryDir, "libadbroot.so").absolutePath

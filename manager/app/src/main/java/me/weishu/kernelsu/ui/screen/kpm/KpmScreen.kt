@@ -1,5 +1,9 @@
 package me.weishu.kernelsu.ui.screen.kpm
 
+import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,8 +12,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -18,40 +24,87 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.dropUnlessResumed
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.weishu.kernelsu.R
 import me.weishu.kernelsu.ui.navigation3.LocalNavigator
+import me.weishu.kernelsu.ui.util.getFileName
 import me.weishu.kernelsu.ui.util.kpmList
+import me.weishu.kernelsu.ui.util.kpmLoadReport
+import me.weishu.kernelsu.ui.util.kpmStageReport
 import me.weishu.kernelsu.ui.util.kpmStaged
 import me.weishu.kernelsu.ui.util.kpmUnstage
+import java.io.File
+
+/** Copy a picked document into the app cache so ksud can open a real path. */
+private fun Uri.copyIntoCache(context: Context): String {
+    val name = getFileName(context)?.takeIf { it.endsWith(".kpm") }
+        ?: "module-${System.currentTimeMillis()}.kpm"
+    val target = File(context.cacheDir, name)
+    context.contentResolver.openInputStream(this)?.use { input ->
+        target.outputStream().use { output -> input.copyTo(output) }
+    } ?: throw IllegalStateException("cannot open $this")
+    return target.absolutePath
+}
 
 /**
  * KernelPatch module (.kpm) overview.
  *
  * Everything goes through `ksud kpm ...` in a root shell, the same channel the
- * module list uses. Loading from a file picker and unstaging are the next
- * steps; this screen already shows what the runtime reports.
+ * module list uses. The runtime reports failures (unknown symbol, bad image,
+ * unsupported relocation) on that channel, so the text is shown as-is.
  */
 @Composable
 fun KpmScreen() {
     val navigator = LocalNavigator.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
     var loadedText by remember { mutableStateOf("") }
     var stagedText by remember { mutableStateOf("") }
+    var resultText by remember { mutableStateOf("") }
     var reloadToken by remember { mutableIntStateOf(0) }
 
-    LaunchedEffect(reloadToken) {
-        withContext(Dispatchers.IO) {
-            loadedText = runCatching { kpmList() }.getOrDefault("")
-            stagedText = runCatching { kpmStaged() }.getOrDefault("")
+    fun refresh() {
+        scope.launch {
+            withContext(Dispatchers.IO) {
+                loadedText = runCatching { kpmList() }.getOrDefault("")
+                stagedText = runCatching { kpmStaged() }.getOrDefault("")
+            }
         }
+    }
+
+    LaunchedEffect(reloadToken) { refresh() }
+
+    fun handlePicked(uri: Uri?, stage: Boolean) {
+        if (uri == null) return
+        scope.launch {
+            val report = withContext(Dispatchers.IO) {
+                runCatching {
+                    val path = uri.copyIntoCache(context)
+                    if (stage) kpmStageReport(path) else kpmLoadReport(path)
+                }.getOrElse { it.message ?: it.toString() }
+            }
+            resultText = report
+            reloadToken++
+        }
+    }
+
+    val loadPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        handlePicked(uri, stage = false)
+    }
+    val stagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        handlePicked(uri, stage = true)
     }
 
     Column(
@@ -80,6 +133,30 @@ fun KpmScreen() {
             }
         }
 
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Button(
+                modifier = Modifier.weight(1f),
+                onClick = { loadPicker.launch(arrayOf("*/*")) },
+            ) {
+                Text(stringResource(R.string.kpm_load_now))
+            }
+            OutlinedButton(
+                modifier = Modifier.weight(1f),
+                onClick = { stagePicker.launch(arrayOf("*/*")) },
+            ) {
+                Text(stringResource(R.string.kpm_stage_for_boot))
+            }
+        }
+
+        if (resultText.isNotEmpty()) {
+            SectionCard(title = stringResource(R.string.kpm_last_result)) {
+                Text(text = resultText, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+
         SectionCard(title = stringResource(R.string.kpm_loaded)) {
             val text = loadedText.trim()
             if (text.isEmpty()) {
@@ -102,10 +179,7 @@ fun KpmScreen() {
                             modifier = Modifier.weight(1f, fill = false),
                         )
                         if (parts.size > 1) {
-                            Text(
-                                text = parts[1],
-                                style = MaterialTheme.typography.bodySmall,
-                            )
+                            Text(text = parts[1], style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
@@ -134,8 +208,10 @@ fun KpmScreen() {
                         )
                         TextButton(
                             onClick = {
-                                kpmUnstage(line)
-                                reloadToken++
+                                scope.launch {
+                                    withContext(Dispatchers.IO) { kpmUnstage(line) }
+                                    reloadToken++
+                                }
                             },
                         ) {
                             Text(stringResource(R.string.kpm_unstage))
