@@ -1,0 +1,58 @@
+name: KPM compile check
+
+# Compile-only check for the kernel side of the KPM runtime.
+#
+# The release pipeline ships its inter-job artifacts through GitHub Release
+# assets, which makes it a poor verification target: a failing asset upload
+# cancels the whole matrix. This workflow only builds kernelsu.ko for every
+# KMI in the MRSU support matrix and reports the result, so a code change can
+# be validated independently of the artifact plumbing.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feat/**'
+    paths:
+      - 'kernel/**'
+      - 'uapi/**'
+      - '.github/workflows/kpm-compile.yml'
+
+concurrency:
+  group: kpm-compile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile:
+    name: kernelsu.ko (${{ matrix.kmi }})
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/ylarod/ddk-min:${{ matrix.kmi }}-20260828
+      options: --privileged
+    strategy:
+      fail-fast: false
+      matrix:
+        kmi:
+          - android12-5.10
+          - android13-5.10
+          - android13-5.15
+          - android14-5.15
+          - android14-6.1
+          - android15-6.6
+          - android16-6.12
+          - android17-6.18
+
+    steps:
+    - name: Checkout source code
+      uses: actions/checkout@v7
+
+    - name: Build kernelsu.ko
+      working-directory: kernel
+      run: |
+        git config --global --add safe.directory "$GITHUB_WORKSPACE"
+        echo "=== Building kernelsu.ko for KMI: ${{ matrix.kmi }} ==="
+        make clean >/dev/null 2>&1 || true
+        CONFIG_KSU=m CC=clang make KSU_PACKAGE_NAME=com.mingri.ru \
+          KSU_EXPECTED_SIZE=0x036d \
+          KSU_EXPECTED_HASH=5ccb0ad242b96baea99ebdf96d6ee01875781a3784693d4299319155c9843f2d
+        ls -l kernelsu.ko

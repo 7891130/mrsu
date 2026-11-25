@@ -52,6 +52,7 @@ kernelsu-objs += sulog/fd.o
 kernelsu-objs += kpm/kpm_alloc.o
 kernelsu-objs += kpm/kpm_core.o
 kernelsu-objs += kpm/kpm_elf.o
+kernelsu-objs += kpm/kpm_kfunc.o
 kernelsu-objs += kpm/kpm_reloc.o
 kernelsu-objs += kpm/kpm_symbol.o
 
