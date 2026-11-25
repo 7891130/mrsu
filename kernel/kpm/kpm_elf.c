@@ -344,13 +344,13 @@ static void kpm_parse_info(struct kpm_load_info *li, struct kpm_module *mod)
         if (!n)
             break;
 
-#define KPM_INFO_KEY(key)                                                          \
-    if (!strncmp(s, key "=", sizeof(key)) && n > sizeof(key)) {                    \
-        klen = n - sizeof(key);                                                    \
-        if (klen >= sizeof(mod->key))                                              \
-            klen = sizeof(mod->key) - 1;                                           \
-        memcpy(mod->key, s + sizeof(key), klen);                                   \
-        mod->key[klen] = 0;                                                        \
+#define KPM_INFO_KEY(field)                                                        \
+    if (!strncmp(s, #field "=", sizeof(#field)) && n > sizeof(#field)) {           \
+        klen = n - sizeof(#field);                                                 \
+        if (klen >= sizeof(mod->field))                                            \
+            klen = sizeof(mod->field) - 1;                                         \
+        memcpy(mod->field, s + sizeof(#field), klen);                              \
+        mod->field[klen] = 0;                                                      \
         off += n + 1;                                                              \
         continue;                                                                  \
     }
