@@ -91,7 +91,7 @@ int kpm_hook_install(u64 target, u64 replacement, const char *owner, char *err, 
      * rarely sit that close to the end of a page, but refusing is cheaper than
      * corrupting one.
      */
-    if (((u32)target & ~(u32)PAGE_MASK) + entry->plan.patch_count * (u32)sizeof(u32) > PAGE_SIZE) {
+    if (!kpm_hook_patch_fits_page(target, entry->plan.patch_count, PAGE_SIZE)) {
         set_err(err, err_len, "patch would cross a page boundary");
         ret = -ERANGE;
         goto out_free_trampoline;

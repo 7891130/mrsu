@@ -128,3 +128,18 @@ int kpm_hook_errno_to_kpatch(int errno_val)
         return KPM_HOOK_ERR_BAD_ADDRESS;
     }
 }
+
+/*
+ * ksu_patch_text() maps a single page when it writes, so a patch that starts
+ * near the end of a page must be refused: the tail would land in an unmapped
+ * address. Kept here, as a pure predicate, so it can be unit-tested.
+ */
+bool kpm_hook_patch_fits_page(u64 target, unsigned int patch_insns, unsigned long page_size)
+{
+    u64 offset = target & (page_size - 1);
+    u64 bytes = (u64)patch_insns * sizeof(u32);
+
+    if (!page_size)
+        return false;
+    return offset + bytes <= page_size;
+}

@@ -77,4 +77,7 @@ int kpm_hook_uninstall(u64 target);
 /* Translate a kernel errno from the installer into kpatch's hook_err_t. */
 int kpm_hook_errno_to_kpatch(int errno_val);
 
+/* True when a patch of patch_insns instructions at 	arget stays inside one page. */
+bool kpm_hook_patch_fits_page(u64 target, unsigned int patch_insns, unsigned long page_size);
+
 #endif // __KSU_H_KPM_HOOK
