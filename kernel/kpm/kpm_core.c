@@ -316,3 +316,29 @@ void __exit kpm_runtime_exit(void)
 
     ksu_unregister_feature_handler(KSU_FEATURE_KPM);
 }
+
+int kpm_notify_event(const char *event, const char *args)
+{
+    struct kpm_module *pos;
+    int count = 0;
+    int result = 0;
+
+    if (!event || !event[0])
+        return -EINVAL;
+
+    mutex_lock(&kpm_mutex);
+    list_for_each_entry(pos, &kpm_modules, list) {
+        int rc;
+
+        if (!pos->event)
+            continue;
+
+        rc = pos->event(event, args, NULL);
+        if (rc < 0 && !result)
+            result = rc;
+        count++;
+    }
+    mutex_unlock(&kpm_mutex);
+
+    return result ? result : count;
+}

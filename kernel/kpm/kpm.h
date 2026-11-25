@@ -80,4 +80,8 @@ int kpm_info(const char *name, char *out, size_t size);
 long kpm_ctl0(const char *name, const char *args, char __user *out, int outlen);
 long kpm_ctl1(const char *name, void *a1, void *a2, void *a3);
 
+/* Deliver a runtime event to every module that registered .kpm.event.
+ * Returns the number of modules notified, or the first error they reported. */
+int kpm_notify_event(const char *event, const char *args);
+
 #endif // __KSU_H_KPM
