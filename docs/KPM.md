@@ -96,65 +96,53 @@ ksud kpm doctor                               # 排障：接口/feature/ioctl/�
    `selinux_hide`、`su`、模块挂载等既有功能不受影响；
    内核日志无 `kpm:` 以外的异常。
 
-## 验证状态（写于 2026-11-26）
+## 验证状态（更新于 2026-11-26 夜）
 
-诚实记录，避免后来者误判这套代码的可信度。
+诚实记录，避免后来者把测试覆盖误当成设备验证。
 
 ### 已验证
 
 | 范围 | 方式 | 结果 |
 |---|---|---|
-| 重定位（ABS64/PREL/CALL26/ADRP+ADD/溢出/跳过） | 宿主机单测，独立解码器校验 | 13 项通过 |
-| ELF 加载流程（布局/元数据/符号/入口/回滚/释放） | 宿主机集成测试，真实 `kpm_elf_load` | 21 项通过 |
-| AArch64 编码/解码/PC 相对重定位 | 与 NDK clang + ld.lld 的输出逐条比对 | 45 项通过 |
-| hook 规划（短/长跳转、序言搬迁、拒绝路径） | 宿主机单测 | 39 项通过 |
-| hook 注册表 | 宿主机单测 | 21 项通过 |
-| wrap 帧 ABI 偏移 + 回调链 | 宿主机单测 | 30 项通过 |
-| 模块表（加载/卸载/list/info/ctl/事件/失败路径） | 宿主机单测 | 39 项通过 |
-| kfunc 返回约定 | 宿主机单测 | 21 项通过 |
+| 重定位（ABS64/PREL/CALL26/ADRP+ADD/溢出/跳过） | 宿主机单测 + 独立解码器 | 13 项 |
+| ELF 加载流程（布局/元数据/符号/入口/回滚/释放） | 宿主机集成测试，真实 `kpm_elf_load` | 21 项 |
+| AArch64 编码/解码/PC 相对重定位 | 与 NDK clang + ld.lld 输出逐条比对 | 45 项 |
+| hook 规划（短/长跳转、序言搬迁、拒绝路径） | 宿主机单测 | 39 项 |
+| hook 注册表 | 宿主机单测 | 21 项 |
+| wrap 帧 ABI 偏移 + 回调链 | 宿主机单测 | 30 项 |
+| 模块表（加载/卸载/list/info/ctl/事件/失败路径） | 宿主机单测 | 39 项 |
+| kfunc 返回约定 | 宿主机单测 | 21 项 |
+| 补丁是否跨页 | 宿主机单测 | 6 项 |
 | ksud CLI（全部 kpm 子命令） | 本地 `cargo check` / `cargo build --release` | 通过 |
 | 管理器界面（屏幕/路由/入口/加载动作） | 本地 `assembleRelease` 出签名 APK | 通过 |
 
-合计 **229 项宿主机断言** + CLI/管理器本地构建。
+合计 **8 套 / 235 项宿主机断言** + CLI 与管理器本地构建 + 签名证书与 `KSU_EXPECTED_HASH` 一致。
 
-### 未验证（重要）
+### 审查发现并已修复的缺陷
 
-- **内核代码从未被编译器编译过。** GitHub Actions 分钟数耗尽、WSL 未启用，
-  8 档 KMI 编译验证欠 13 个提交。
-- **从未在真机上运行过。** trampoline 距离、文本改写、cache 刷新、
-  真实 `.kpm` 的符号解析全部只有推理，没有实测。
-- 已通过人工审查发现并修复两个编译器抓不到的缺陷：
-  卸载时逐条恢复导致的 `stop_machine` 竞态、跨页补丁写越界。
+四个，都是编译器抓不到的：
+
+1. **卸载时的 `stop_machine` 竞态** —— 逐条恢复会让线程执行「原第一条 + 残留跳转尾巴」；
+2. **跨页补丁写越界** —— `ksu_patch_text` 只映射一页；该规则已抽成纯函数并有 6 项测试；
+3. **11 个文件缺 `<linux/errno.h>`** —— 用 `-EINVAL` 却不包含定义它的头，CI 必挂；
+4. **`module_alloc` 在 6.10 被 `execmem_alloc` 取代** —— android16-6.12 / android17-6.18
+   会运行期失效，而编译与 CI 都不报错（见上文符号可用性表）。
+
+### 尚未验证
+
+- **没有做过完整的内核构建**：GitHub Actions 分钟数耗尽、WSL 未启用，
+  8 档 KMI 的 `kbuild` 编译与 modpost 从未跑过。
+- **语法检查环境半成品**：用 NDK clang + 真实 5.10/6.12 头文件做 `-fsyntax-only`
+  的努力已搭到约 85%，仍卡在 kbuild 生成头（`struct bug_entry` / `struct jump_entry`
+  的可见性）上，**没有产出可信结论**，因此不作为证据。
+- **从未在真机上运行**：trampoline 距离、文本改写、cache 刷新、真实 `.kpm` 的
+  符号解析全部只有推理。
 
 ### 已知局限
 
-- 未实现 `hook_wrap`/`hook_chain_*`/`syscall*`/`kp_btf_*`，模块引用会加载失败；
-- trampoline 必须落在目标 ±1MB 内（被顶掉的 `b.cond`/`cbz` 位移限制），
+- 未实现 `hook_wrap`/`hook_chain_*`/`syscall*`/`kp_btf_*`（帧 ABI 与链已就绪，
+  缺分发 stub），模块引用会加载失败；
+- trampoline 必须与目标同在 ±1MB 内（被顶掉的 `b.cond`/`cbz` 位移限制），
   否则 `kpm_hook_build()` 返回 `-ERANGE`；
-- `kpm_notify_event()` 尚未接入 KSU 的启动事件。
-
-## 运行期解析符号的版本可用性
-
-本运行时不通过导出符号表链接内核函数，而是用 `find_kernel_symbol_exact()` 按名字从
-kallsyms 里找。好处是能调用非导出函数，代价是**编译器完全不参与检查**——名字不存在
-只会在运行期暴露，且只出现在缺它的那几档 KMI 上。
-
-因此每新增一个解析符号，都必须先核对它在目标内核上的存在性：
-
-| 符号 | 5.10 | 6.12 | 备注 |
-|---|---|---|---|
-| `module_alloc` | 有 | **无** | 6.10 起移除 |
-| `module_memfree` | 有 | **无** | 同上 |
-| `execmem_alloc` | 无 | 有 | 6.10 起取代 module_alloc |
-| `execmem_free` | 无 | 有 | 同上 |
-| `set_memory_ro` | 有 | 有 | 签名 `(unsigned long, int)` 未变 |
-| `set_memory_rw` / `set_memory_x` | 有 | 有 | 备用 |
-| `vmalloc` / `vfree` | 有 | 有 | 标准导出 |
-
-`kpm_alloc_exec()` 因此先探 `module_alloc`，失败回退 `execmem_alloc(EXECMEM_MODULE_TEXT=1, size)`，
-释放时对应回退。若两者都没有，加载会以
-`neither module_alloc nor execmem_alloc is available` 明确失败。
-
-> 这张表就是"为什么必须做版本核对"的实例：`module_alloc` 的消失发生在 6.10，
-> 而 android16-6.12 / android17-6.18 都在支持矩阵里。编译与 CI 都不会报错，
-> 只有真机运行才会暴露。
+- `kpm_notify_event()` 已实现但尚未接入 KSU 启动事件；
+- 按名字解析内核符号的设计要求每新增符号都核对版本可用性表。
