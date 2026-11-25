@@ -9,6 +9,29 @@ use crate::{defs, ksu_uapi, ksucalls};
 
 const OUT_BUF: usize = 8192;
 
+/// First UAPI version that exposes `KSU_IOCTL_KPM`.
+const KPM_MIN_UAPI_VERSION: u32 = 7;
+
+/// Fail early with an actionable message instead of an ENOTTY from the ioctl.
+fn ensure_supported() -> Result<()> {
+    let info = ksucalls::get_info();
+    if info.uapi_version < KPM_MIN_UAPI_VERSION {
+        bail!(
+            "this kernel build predates the kpm interface (UAPI {} < {}); update the kernel module",
+            info.uapi_version,
+            KPM_MIN_UAPI_VERSION
+        );
+    }
+    let state = ksucalls::get_feature(ksu_uapi::ksu_feature_id_KSU_FEATURE_KPM as u32)?;
+    if !state.supported {
+        bail!("this kernel build does not support the kpm feature");
+    }
+    if state.value == 0 {
+        bail!("the kpm feature is disabled; enable it in the manager settings");
+    }
+    Ok(())
+}
+
 fn empty_cmd(op: u32) -> ksu_uapi::ksu_kpm_cmd {
     ksu_uapi::ksu_kpm_cmd {
         op,
@@ -32,6 +55,7 @@ fn result_to_errno(result: u32) -> i64 {
 /// Load a .kpm image. `event` and `args` follow KernelPatch's semantics: `args`
 /// is handed to the module's `.kpm.init`.
 pub fn load(path: &Path, args: Option<&str>) -> Result<()> {
+    ensure_supported()?;
     let path = path
         .canonicalize()
         .with_context(|| format!("resolve module path failed: {}", path.display()))?;
@@ -68,6 +92,7 @@ pub fn load(path: &Path, args: Option<&str>) -> Result<()> {
 
 /// Unload a module by name; its `.kpm.exit` runs before the image is freed.
 pub fn unload(name: &str) -> Result<()> {
+    ensure_supported()?;
     let c_name = CString::new(name)?;
     let mut out = vec![0u8; OUT_BUF];
     let mut cmd = empty_cmd(ksu_uapi::KSU_KPM_OP_UNLOAD);
@@ -118,6 +143,7 @@ fn fetch_text(op: u32, name: Option<&str>, args: Option<&str>) -> Result<String>
 
 /// `name\tversion\targs` per line, empty when nothing is loaded.
 pub fn list() -> Result<()> {
+    ensure_supported()?;
     let text = fetch_text(ksu_uapi::KSU_KPM_OP_LIST, None, None)?;
     if text.trim().is_empty() {
         println!("No kernel patch module loaded.");
@@ -128,6 +154,7 @@ pub fn list() -> Result<()> {
 }
 
 pub fn info(name: &str) -> Result<()> {
+    ensure_supported()?;
     let text = fetch_text(ksu_uapi::KSU_KPM_OP_INFO, Some(name), None)?;
     print!("{text}");
     Ok(())
@@ -135,6 +162,7 @@ pub fn info(name: &str) -> Result<()> {
 
 /// Module-defined control command; the module writes its reply to `out`.
 pub fn ctl0(name: &str, args: &str) -> Result<()> {
+    ensure_supported()?;
     let c_name = CString::new(name)?;
     let c_args = CString::new(args)?;
     let mut out = vec![0u8; OUT_BUF];
@@ -163,6 +191,7 @@ pub fn ctl0(name: &str, args: &str) -> Result<()> {
 
 /// Raw three-argument control command, mainly for module-specific tooling.
 pub fn ctl1(name: &str, a1: u64, a2: u64, a3: u64) -> Result<i64> {
+    ensure_supported()?;
     let c_name = CString::new(name)?;
     let mut cmd = empty_cmd(ksu_uapi::KSU_KPM_OP_CTL1);
     cmd.name = c_name.as_ptr() as u64;
@@ -186,6 +215,7 @@ pub fn ctl1(name: &str, a1: u64, a2: u64, a3: u64) -> Result<i64> {
 /// boot. One failing module must not stop the others: their failures are
 /// reported and counted, and the caller only logs the summary.
 pub fn autoload() -> Result<()> {
+    ensure_supported()?;
     let dir = Path::new(defs::KPM_DIR);
     if !dir.is_dir() {
         return Ok(());
