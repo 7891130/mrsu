@@ -399,7 +399,8 @@ void kpm_elf_release(struct kpm_module *mod)
     mod->event = NULL;
 }
 
-int kpm_elf_load(struct kpm_module *mod, const void *data, size_t len, const char *args, char *err, size_t err_len)
+int kpm_elf_load(struct kpm_module *mod, const void *data, size_t len, const char *args, kpm_name_exists_t name_exists,
+                 char *err, size_t err_len)
 {
     struct kpm_load_info li = {
         .data = data,
@@ -429,6 +430,14 @@ int kpm_elf_load(struct kpm_module *mod, const void *data, size_t len, const cha
     }
     if (!mod->version[0])
         snprintf(mod->version, KPM_VERSION_LEN, "unknown");
+
+    /* Refuse duplicates before the module's init runs. */
+    if (name_exists && name_exists(mod->name)) {
+        if (li.err && li.err_len)
+            snprintf(li.err, li.err_len, "module already loaded");
+        ret = -EEXIST;
+        goto out_free_headers;
+    }
 
     kpm_layout(&li);
 

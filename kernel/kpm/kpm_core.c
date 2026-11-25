@@ -38,6 +38,17 @@ static struct kpm_module *kpm_find_locked(const char *name)
     return NULL;
 }
 
+static bool kpm_name_exists(const char *name)
+{
+    bool exists;
+
+    mutex_lock(&kpm_mutex);
+    exists = kpm_find_locked(name) != NULL;
+    mutex_unlock(&kpm_mutex);
+
+    return exists;
+}
+
 static void kpm_release_locked(struct kpm_module *mod)
 {
     if (mod->exit) {
@@ -108,7 +119,7 @@ int kpm_load_path(const char *path, const char *args, char *err, size_t err_len)
         goto out_free;
     }
 
-    ret = kpm_elf_load(mod, buf, size, args, err, err_len);
+    ret = kpm_elf_load(mod, buf, size, args, kpm_name_exists, err, err_len);
     if (ret) {
         kfree(mod->args);
         kfree(mod);
@@ -120,7 +131,11 @@ int kpm_load_path(const char *path, const char *args, char *err, size_t err_len)
         mutex_unlock(&kpm_mutex);
         ret = -EEXIST;
         kpm_set_err(err, err_len, "module already loaded");
+        /* Lost a race with another load: undo what init already did. */
+        if (mod->exit)
+            mod->exit(NULL);
         kpm_elf_release(mod);
+        kfree(mod->args);
         kfree(mod);
         goto out_free;
     }

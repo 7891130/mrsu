@@ -34,6 +34,9 @@ typedef long (*kpm_ctl0call_t)(const char *ctl_args, char __user *out_msg, int o
 typedef long (*kpm_ctl1call_t)(void *a1, void *a2, void *a3);
 typedef long (*kpm_eventcall_t)(const char *event, const char *args, void *reserved);
 
+/* Called with the module name once it is known, before the image is set up. */
+typedef bool (*kpm_name_exists_t)(const char *name);
+
 struct kpm_module {
     struct list_head list;
 
@@ -66,9 +69,9 @@ int kpm_protect_exec(void *addr, size_t size);
 void kpm_free_exec(void *addr, size_t size);
 
 /* ELF loader: fills mod from a validated .kpm image already in kernel memory */
-int kpm_elf_load(struct kpm_module *mod, const void *data, size_t len, const char *args, char *err, size_t err_len);
+int kpm_elf_load(struct kpm_module *mod, const void *data, size_t len, const char *args,
+                 kpm_name_exists_t name_exists, char *err, size_t err_len);
 void kpm_elf_release(struct kpm_module *mod);
-
 /* module table operations (called from the supercall dispatcher) */
 int kpm_load_path(const char *path, const char *args, char *err, size_t err_len);
 int kpm_unload(const char *name);
