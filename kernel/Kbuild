@@ -57,6 +57,7 @@ kernelsu-objs += kpm/kpm_hook_install.o
 kernelsu-objs += kpm/kpm_hook_table.o
 kernelsu-objs += kpm/kpm_insn.o
 kernelsu-objs += kpm/kpm_kfunc.o
+kernelsu-objs += kpm/kpm_kfunc_hook.o
 kernelsu-objs += kpm/kpm_reloc.o
 kernelsu-objs += kpm/kpm_symbol.o
 

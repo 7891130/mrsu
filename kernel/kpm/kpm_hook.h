@@ -62,4 +62,19 @@ int kpm_hook_build(u64 target, const u32 *prologue, unsigned int count, u64 tram
 int kpm_hook_install(u64 target, u64 replacement, const char *owner, char *err, size_t err_len);
 int kpm_hook_uninstall(u64 target);
 
+/*
+ * Error codes kpatch returns from hook(); .kpm modules compare against these
+ * exact values, so they must not be renumbered.
+ */
+#define KPM_HOOK_OK 0
+#define KPM_HOOK_ERR_BAD_ADDRESS 4095
+#define KPM_HOOK_ERR_DUPLICATED 4094
+#define KPM_HOOK_ERR_NO_MEM 4093
+#define KPM_HOOK_ERR_BAD_RELO 4092
+#define KPM_HOOK_ERR_TRANSIT_NO_MEM 4091
+#define KPM_HOOK_ERR_CHAIN_FULL 4090
+
+/* Translate a kernel errno from the installer into kpatch's hook_err_t. */
+int kpm_hook_errno_to_kpatch(int errno_val);
+
 #endif // __KSU_H_KPM_HOOK

@@ -4,7 +4,7 @@
 
 #include "infra/symbol_resolver.h"
 #include "klog.h" // IWYU pragma: keep
-#include "kpm/kpm_kfunc.h"
+#include "kpm/kpm_kfunc.h"`n#include "kpm/kpm_kfunc_hook.h"
 #include "kpm/kpm_symbol.h"
 
 struct kpm_kfunc {
@@ -30,6 +30,11 @@ static const struct kpm_kfunc kpm_kfuncs[] = {
     { .name = "kp_symbol_count", .addr = (unsigned long)&kpm_kf_symbol_count },
     { .name = "kp_symbol_list", .addr = (unsigned long)&kpm_kf_symbol_list },
     { .name = "kp_feature_list", .addr = (unsigned long)&kpm_kf_feature_list },
+    /* inline / function-pointer hooking */
+    { .name = "hook", .addr = (unsigned long)&kpm_kf_hook },
+    { .name = "unhook", .addr = (unsigned long)&kpm_kf_unhook },
+    { .name = "fp_hook", .addr = (unsigned long)&kpm_kf_fp_hook },
+    { .name = "fp_unhook", .addr = (unsigned long)&kpm_kf_fp_unhook },
     /* data symbol: modules read the encoded kernel version */
     { .name = "kver", .addr = (unsigned long)&kpm_kver },
 };

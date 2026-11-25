@@ -105,3 +105,25 @@ int kpm_hook_build(u64 target, const u32 *prologue, unsigned int count, u64 tram
 
     return 0;
 }
+
+/*
+ * .kpm modules compare the return value against kpatch's hook_err_t, so keep
+ * the mapping explicit instead of leaking kernel errnos.
+ */
+int kpm_hook_errno_to_kpatch(int errno_val)
+{
+    switch (errno_val) {
+    case 0:
+        return KPM_HOOK_OK;
+    case -EEXIST:
+        return KPM_HOOK_ERR_DUPLICATED;
+    case -ENOMEM:
+        return KPM_HOOK_ERR_NO_MEM;
+    case -ERANGE:
+        return KPM_HOOK_ERR_BAD_RELO;
+    case -EINVAL:
+    case -ENOENT:
+    default:
+        return KPM_HOOK_ERR_BAD_ADDRESS;
+    }
+}
