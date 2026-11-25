@@ -316,3 +316,96 @@ pub fn list_staged() -> Result<()> {
     }
     Ok(())
 }
+
+/// Print everything needed to triage the runtime on a fresh device.
+///
+/// The kernel side cannot be debugged interactively, so this gathers the
+/// observable state in one go: interface presence, feature gate, an ioctl
+/// round trip, the staged directory and the recent kernel log.
+pub fn doctor() -> Result<()> {
+    let info = ksucalls::get_info();
+    println!("kernel version : {}", info.version);
+    println!("uapi version   : {}", info.uapi_version);
+
+    let interface_present = info.uapi_version >= KPM_MIN_UAPI_VERSION;
+    println!(
+        "kpm interface  : {}",
+        if interface_present {
+            "present"
+        } else {
+            "missing (needs uapi >= 7)"
+        }
+    );
+
+    if interface_present {
+        match ksucalls::get_feature(ksu_uapi::ksu_feature_id_KSU_FEATURE_KPM as u32) {
+            Ok(state) => println!(
+                "kpm feature    : supported={} enabled={} forced={}",
+                state.supported,
+                state.value != 0,
+                state.forced
+            ),
+            Err(e) => println!("kpm feature    : query failed: {e:#}"),
+        }
+
+        match fetch_text(ksu_uapi::KSU_KPM_OP_LIST, None, None) {
+            Ok(text) => {
+                let loaded = text.lines().filter(|line| !line.trim().is_empty()).count();
+                println!("ioctl roundtrip: ok ({loaded} module(s) loaded)");
+            }
+            Err(e) => println!("ioctl roundtrip: failed: {e:#}"),
+        }
+    }
+
+    let dir = Path::new(defs::KPM_DIR);
+    if dir.is_dir() {
+        let staged = fs::read_dir(dir)
+            .map(|entries| {
+                entries
+                    .flatten()
+                    .filter(|entry| {
+                        entry
+                            .path()
+                            .extension()
+                            .is_some_and(|ext| ext.eq_ignore_ascii_case("kpm"))
+                    })
+                    .count()
+            })
+            .unwrap_or(0);
+        println!("staged dir     : {} ({staged} .kpm)", defs::KPM_DIR);
+    } else {
+        println!("staged dir     : {} (missing)", defs::KPM_DIR);
+    }
+
+    println!(
+        "insmod mode    : {}",
+        if info.uapi_version >= 6 {
+            "symbol lookup available"
+        } else {
+            "kallsyms fallback only"
+        }
+    );
+
+    match std::process::Command::new("dmesg").output() {
+        Ok(output) => {
+            let text = String::from_utf8_lossy(&output.stdout);
+            let mut lines: Vec<&str> = text
+                .lines()
+                .filter(|line| line.contains("kpm") || line.contains("KernelSU"))
+                .collect();
+            let start = lines.len().saturating_sub(8);
+            lines = lines.split_off(start);
+            if lines.is_empty() {
+                println!("kernel log     : no kpm/KernelSU lines yet");
+            } else {
+                println!("kernel log     :");
+                for line in lines {
+                    println!("  {line}");
+                }
+            }
+        }
+        Err(_) => println!("kernel log     : cannot read dmesg; run `dmesg | grep -i kpm` manually"),
+    }
+
+    Ok(())
+}

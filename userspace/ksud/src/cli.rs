@@ -72,6 +72,8 @@ enum Kpm {
     },
     /// List the .kpm images staged for boot
     Staged,
+    /// Print runtime state for troubleshooting
+    Doctor,
 }
 
 #[derive(clap::Subcommand, Debug)]
@@ -615,6 +617,7 @@ pub fn run() -> Result<()> {
             Kpm::Stage { module } => kpm::stage(&module),
             Kpm::Unstage { name } => kpm::unstage(&name),
             Kpm::Staged => kpm::list_staged(),
+            Kpm::Doctor => kpm::doctor(),
         },
 
         Commands::Module { command } => {

@@ -56,13 +56,16 @@ ksud kpm unstage foo.kpm                      # 取消开机加载
 ksud kpm staged                               # 开机清单
 ksud kpm autoload                             # 手动触发（post-fs-data 已自动调用）
 ksud kpm ctl0 <name> <args...>                # 模块自定义控制
+ksud kpm doctor                               # 排障：接口/feature/ioctl/目录/内核日志一次看全
 ```
 
 管理器里：设置 → KernelPatch modules。
 
 ## 上机自检清单（M6）
 
-按顺序做，每步先看 `dmesg | grep -i kpm`。
+先跑 ksud kpm doctor：它会打印内核版本、UAPI、feature 状态、一次 list ioctl 往返、/data/adb/kpm 目录和最近的 kpm 内核日志。接口缺失、feature 关闭、ioctl 不通这三类问题一句话就能定位。
+
+然后按顺序做，每步先看 `dmesg | grep -i kpm`。
 
 1. **模块镜像能否分配可执行内存**
    `kpm: loaded <name> (<version>)` 出现即通过。
