@@ -2,6 +2,7 @@
 #include <linux/file.h>
 #include <linux/fs.h>
 #include <linux/kernel.h>
+#include <linux/mm.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/string.h>
@@ -44,7 +45,7 @@ static void kpm_release_locked(struct kpm_module *mod)
         mod->exit(NULL);
     }
     kpm_elf_release(mod);
-    kvfree(mod->args);
+    kfree(mod->args);
     kfree(mod);
 }
 
