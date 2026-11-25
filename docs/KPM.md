@@ -146,3 +146,40 @@ ksud kpm doctor                               # 排障：接口/feature/ioctl/�
   否则 `kpm_hook_build()` 返回 `-ERANGE`；
 - `kpm_notify_event()` 已实现但尚未接入 KSU 启动事件；
 - 按名字解析内核符号的设计要求每新增符号都核对版本可用性表。
+
+## 待完成：`hook_wrap` 的分发 stub（设计已定）
+
+帧 ABI（`kpm_hook_fargs.h`）、回调链（`kpm_hook_chain.c`）和所需指令编码
+（`kpm_insn`，含前/后索引）都已就绪，缺的是把真实寄存器搬进帧、调分发器、
+再把返回值送回调用者的那段生成代码。
+
+目标 stub（4 参数版本，`kpm_hook_fargs4` 120 字节）：
+
+| # | 指令 | 编码（汇编器实测） | 作用 |
+|---|---|---|---|
+| 1 | `stp x29, x30, [sp, #-16]!` | `0xa9bf7bfd` | 建立帧链 |
+| 2 | `mov x29, sp` | `0x910003fd` | 同上 |
+| 3 | `sub sp, sp, #144` | `0xd1000000 \| (144<<10) \| (31<<5) \| 31` | 给 fargs 腾空间 |
+| 4 | `stp x0, x1, [sp, #0]` | offset 形式 | 保存 arg0/arg1 |
+| 5 | `stp x2, x3, [sp, #16]` | offset 形式 | 保存 arg2/arg3 |
+| 6 | `str xzr, [sp, #88]` | `ldst_imm` | `ret = 0` |
+| 7 | `mov x1, x<chain>` | `mov_reg` | 分发器第二个参数 |
+| 8 | `mov x0, sp` | `add_sub_imm(0,31,0)` | `&fargs` |
+| 9 | `bl <dispatcher>` | `gen_branch_imm` | 调用 C 分发器 |
+| 10 | `ldr x0, [sp, #88]` | `ldst_imm` | 取 `ret` |
+| 11 | `add sp, sp, #144` | `0x91000000 \| (144<<10) \| (31<<5) \| 31` | 回收 |
+| 12 | `ldp x29, x30, [sp], #16` | `0xa8c17bfd` | 恢复 |
+| 13 | `ret` | `0xd65f03c0` | 返回 |
+
+约束与要点：
+
+- `fargs.chain` 与 `skip_origin` 需在入口处写入（链指针 + 0），或由分发器根据
+  第一个参数推导——后者更省指令；
+- 位移类指令（`bl`）受 ±128MB 限制，stub 与分发器都在模块区，通常没问题，
+  但仍需检查 `gen_branch_imm` 返回 0 的情况；
+- **生成结果必须与汇编器逐字对齐**：先把同样的汇编写进 `.s`，用 NDK clang +
+  `ld.lld` 链接后 `llvm-objdump -d` 取基准字，再拿生成的 13 条字去比对（参见
+  `_vendor/kpm-hosttest/index_ref.s` 的做法）。
+
+这一步之后，`hook()` 走 inline hook、`hook_wrap()` 走 stub + 链，KPM 生态常用的
+两种 hook 形式就都通了。
