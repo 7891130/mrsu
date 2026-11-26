@@ -141,6 +141,32 @@ ccflags-y += -DKSU_NO_PREINIT
 endif
 
 obj-$(CONFIG_KSU) += kernelsu.o
+# Standalone KPM runtime (kpm.ko).
+#
+# Loaded at runtime by the kpm4lkm KernelSU module, so KPM does not require a
+# boot image flash. kpm_core.o is deliberately absent: it registers a KernelSU
+# feature handler and is only meaningful inside kernelsu.ko. arm64 only -- the
+# hook engine's text patching is arch-specific.
+ifeq ($(CONFIG_ARM64),y)
+kpm-objs := kpm/kpm_alloc.o
+kpm-objs += kpm/kpm_elf.o
+kpm-objs += kpm/kpm_hook.o
+kpm-objs += kpm/kpm_hook_chain.o
+kpm-objs += kpm/kpm_hook_install.o
+kpm-objs += kpm/kpm_hook_table.o
+kpm-objs += kpm/kpm_hook_wrap.o
+kpm-objs += kpm/kpm_insn.o
+kpm-objs += kpm/kpm_kfunc.o
+kpm-objs += kpm/kpm_kfunc_btf.o
+kpm-objs += kpm/kpm_kfunc_hook.o
+kpm-objs += kpm/kpm_kfunc_syscall.o
+kpm-objs += kpm/kpm_reloc.o
+kpm-objs += kpm/kpm_standalone.o
+kpm-objs += kpm/kpm_symbol.o
+kpm-objs += infra/symbol_resolver.o
+kpm-objs += hook/arm64/patch_memory.o
+obj-m += kpm.o
+endif
 
 MDIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
