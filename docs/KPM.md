@@ -3,7 +3,7 @@
 MRSU 在 KernelSU 之上实现了一套 KernelPatch Module（`.kpm`）运行时，目标是能直接加载
 为 kpatch 编译的模块，同时保持 KernelSU 自己的功能不受影响。
 
-> 状态：代码完整、纯逻辑部分有 229 项宿主机单元测试；**内核侧尚未经过编译器与真机验证**。
+> 状态：内核侧已通过 **8 档 KMI 编译验证**（含 modpost），纯逻辑部分有 244 项宿主机断言；**尚未在真机上运行**。
 > 本文最后一段是上机自检清单。
 
 ## 模块格式
@@ -130,14 +130,24 @@ ksud kpm doctor                               # 排障：接口/feature/ioctl/�
 
 ### 尚未验证
 
-- **没有做过完整的内核构建**：GitHub Actions 分钟数耗尽、WSL 未启用，
-  8 档 KMI 的 `kbuild` 编译与 modpost 从未跑过。
-- **语法检查环境半成品**：用 NDK clang + 真实 5.10/6.12 头文件做 `-fsyntax-only`
-  的努力已搭到约 85%，仍卡在 kbuild 生成头（`struct bug_entry` / `struct jump_entry`
-  的可见性）上，**没有产出可信结论**，因此不作为证据。
-- **从未在真机上运行**：trampoline 距离、文本改写、cache 刷新、真实 `.kpm` 的
-  符号解析全部只有推理。
+- **真机运行**：trampoline 距离、文本改写、cache 刷新、真实 `.kpm` 的符号解析
+  全部只有推理，没有实测。按上面的自检清单走。
 
+（此前"内核从未编译"的说法已作废：仓库转为公开后 Actions 分钟数免费，
+8 档编译已跑通，见下。）
+
+### 编译验证记录
+
+| 运行 | 提交 | 结果 |
+|---|---|---|
+| [45744806351](https://github.com/7891130/mrsu/actions/runs/45744806351) | `32c63771` | 8/8 失败——`kpm_symbol.c` 第 8 行含字面量 `` `n ``，`kpm_kfunc_hook.h` 未被包含，后续 `kpm_kf_*` 全部未声明 |
+| [45745293073](https://github.com/7891130/mrsu/actions/runs/45745293073) | `60b2477e` | **8/8 通过** |
+
+覆盖：android12-5.10、android13-5.10、android13-5.15、android14-5.15、
+android14-6.1、android15-6.6、android16-6.12、android17-6.18。
+
+那个错误值得记一笔：它是 PowerShell 替换把反引号转义序列原样写进了源码，
+所有人工审查与宿主机测试都没发现——只有真正的编译器会发现。
 ### 已知局限
 
 - 未实现 `hook_wrap`/`hook_chain_*`/`syscall*`/`kp_btf_*`（帧 ABI 与链已就绪，
