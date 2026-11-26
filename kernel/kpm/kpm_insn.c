@@ -340,3 +340,15 @@ u32 kpm_insn_gen_ldstp_mode(u8 rt, u8 rt2, u8 rn, s64 offset, bool is64, bool lo
     return base | (((u32)((offset / scale) & 0x7f)) << 15) | ((u32)(rt2 & 0x1f) << 10) | ((u32)(rn & 0x1f) << 5) |
            (rt & 0x1f);
 }
+
+u32 kpm_insn_gen_ldr_literal(u8 rt, s64 byte_offset)
+{
+    s64 imm19 = byte_offset / 4;
+
+    if (byte_offset % 4)
+        return 0;
+    if (imm19 < -(1 << 18) || imm19 >= (1 << 18))
+        return 0;
+
+    return 0x58000000u | (((u32)(imm19 & 0x7ffff)) << 5) | (rt & 0x1f);
+}

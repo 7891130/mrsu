@@ -56,6 +56,9 @@ enum kpm_ldst_mode {
 u32 kpm_insn_gen_ldstp_mode(u8 rt, u8 rt2, u8 rn, s64 offset, bool is64, bool load, enum kpm_ldst_mode mode);
 u32 kpm_insn_gen_ldst_imm(u8 rt, u8 rn, u16 offset, bool is64, bool load);
 
+/* Load 64 bits from a PC-relative literal: ldr xt, <label>. */
+u32 kpm_insn_gen_ldr_literal(u8 rt, s64 byte_offset);
+
 /* Classification. */
 bool kpm_insn_is_b(u32 insn);
 bool kpm_insn_is_bl(u32 insn);
