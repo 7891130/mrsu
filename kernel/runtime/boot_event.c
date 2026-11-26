@@ -4,6 +4,7 @@
 #include <linux/namei.h>
 #include <linux/printk.h>
 
+#include "kpm/kpm.h" /* kpm_notify_event */
 #include "policy/allowlist.h"
 #include "policy/feature.h"
 #include "klog.h" // IWYU pragma: keep
@@ -34,6 +35,8 @@ void on_post_fs_data(void)
     ksu_selinux_hide_handle_post_fs_data();
     // retry forced features which failed at second stage
     ksu_feature_apply_forced();
+    /* .kpm modules see the same boot stages the manager does */
+    kpm_notify_event("post-fs-data", NULL);
 }
 
 extern void ext4_unregister_sysfs(struct super_block *sb);
@@ -63,6 +66,7 @@ void on_module_mounted(void)
 {
     pr_info("on_module_mounted!\n");
     ksu_module_mounted = true;
+    kpm_notify_event("module-mounted", NULL);
 }
 
 void on_boot_completed(void)
@@ -71,4 +75,5 @@ void on_boot_completed(void)
     pr_info("on_boot_completed!\n");
     track_throne(true);
     ksu_selinux_hide_drop_backup_if_unused();
+    kpm_notify_event("boot-completed", NULL);
 }
