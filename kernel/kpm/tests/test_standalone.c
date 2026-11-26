@@ -151,7 +151,7 @@ int main(void)
 
     setvbuf(stdout, NULL, _IONBF, 0);
 
-    host_fs_set_blob("PK\x03\x04fake kpm", 12);
+    host_fs_set_blob("PK\x03\x04" "fake kpm", 12);
     kpm_runtime_init();
 
     printf("no control channel in the kernel\n");
