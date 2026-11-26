@@ -6,6 +6,7 @@
 #include "infra/symbol_resolver.h"
 #include "klog.h" // IWYU pragma: keep
 #include "kpm/kpm_kfunc.h"
+#include "kpm/kpm_kfunc_btf.h"
 #include "kpm/kpm_kfunc_hook.h"
 #include "kpm/kpm_symbol.h"
 
@@ -41,6 +42,13 @@ static const struct kpm_kfunc kpm_kfuncs[] = {
     { .name = "hook_unwrap_remove", .addr = (unsigned long)&kpm_kf_hook_unwrap_remove },
     { .name = "hook_chain_add", .addr = (unsigned long)&kpm_kf_hook_chain_add },
     { .name = "hook_chain_remove", .addr = (unsigned long)&kpm_kf_hook_chain_remove },
+    { .name = "kp_btf_available", .addr = (unsigned long)&kpm_kf_btf_available },
+    { .name = "kp_btf_find_type", .addr = (unsigned long)&kpm_kf_btf_find_type },
+    { .name = "kp_btf_type_size", .addr = (unsigned long)&kpm_kf_btf_type_size },
+    { .name = "kp_btf_type_info", .addr = (unsigned long)&kpm_kf_btf_type_info },
+    { .name = "kp_btf_member", .addr = (unsigned long)&kpm_kf_btf_member },
+    { .name = "kp_btf_member_offset", .addr = (unsigned long)&kpm_kf_btf_member_offset },
+    { .name = "kp_btf_skip_mod", .addr = (unsigned long)&kpm_kf_btf_skip_mod },
     /* data symbol: modules read the encoded kernel version */
     { .name = "kver", .addr = (unsigned long)&kpm_kver },
 };
