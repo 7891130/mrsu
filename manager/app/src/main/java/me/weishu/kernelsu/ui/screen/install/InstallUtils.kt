@@ -36,6 +36,11 @@ internal sealed class InstallMethod : Parcelable {
 
         override val writesPartition: Boolean
             get() = true
+
+        // 越狱模式下唯一放行的写分区方式：它是「把内核补丁刷进当前设备」的正路，
+        // 入口由两次「已解锁 BL」确认把关（首页卡片一次、开始刷写前一次）。
+        override val allowedInJailbreak: Boolean
+            get() = true
     }
 
     data object DirectInstallToInactiveSlot : InstallMethod() {
@@ -58,6 +63,20 @@ internal sealed class InstallMethod : Parcelable {
      */
     @IgnoredOnParcel
     open val writesPartition: Boolean = false
+
+    /**
+     * 越狱模式下是否放行。
+     *
+     * 默认与 [writesPartition] 相反：该模式下写分区会变砖，因此一律置灰；
+     * 只有「直接安装」例外，它承担的就是用户明确要求的刷写流程。
+     */
+    @IgnoredOnParcel
+    open val allowedInJailbreak: Boolean
+        get() = false
+
+    /** 越狱模式下是否要拦下这一项（UI 置灰 + 点击无响应 + 刷写前兜底）。 */
+    fun blockedInJailbreak(jailbreakMode: Boolean): Boolean =
+        jailbreakMode && writesPartition && !allowedInJailbreak
 }
 
 fun isKoFile(context: Context, uri: Uri): Boolean {

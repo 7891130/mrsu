@@ -28,7 +28,9 @@ import me.weishu.kernelsu.getKernelVersion
 import me.weishu.kernelsu.ui.LocalUiMode
 import me.weishu.kernelsu.ui.UiMode
 import me.weishu.kernelsu.ui.component.choosekmidialog.ChooseKmiDialog
+import me.weishu.kernelsu.ui.component.dialog.BootloaderWarningDialog
 import me.weishu.kernelsu.ui.component.dialog.DownloadDialog
+import me.weishu.kernelsu.ui.component.dialog.rememberBootloaderWarningContent
 import me.weishu.kernelsu.ui.component.dialog.rememberLoadingDialog
 import me.weishu.kernelsu.ui.navigation3.LocalNavigator
 import me.weishu.kernelsu.ui.navigation3.Route
@@ -68,6 +70,9 @@ fun InstallScreen() {
     var allowShell by rememberSaveable { mutableStateOf(false) }
     var enableAdb by rememberSaveable { mutableStateOf(false) }
     var forceBackup by rememberSaveable { mutableStateOf(false) }
+    // 越狱模式下「直接安装」会真的刷写 boot 分区，开始前再确认一次 BL 已解锁
+    var showBootloaderWarning by rememberSaveable { mutableStateOf(false) }
+    var bootloaderWarningAcknowledged by rememberSaveable { mutableStateOf(false) }
 
     val currentKmi by produceState(initialValue = "") { value = getCurrentKmi() }
     // null 表示尚未取回；空列表表示当前 ksud 未内置任何 LKM 模块
@@ -136,38 +141,56 @@ fun InstallScreen() {
         }
     }
 
-    val onInstall = {
-        installMethod?.let { method ->
-            // 越狱模式下最后一次兜底拦截：任何写入分区的安装方式都不允许进入刷写流程
-            if (jailbreakMode && method.writesPartition) {
-                showMessage(partitionWriteBlockedTip)
-                return@let
-            }
-            navigator.push(
-                Route.Flash(
-                    when (method) {
-                        is InstallMethod.DownloadFile -> FlashIt.DownloadBoot(
-                            url = method.url ?: return@let,
-                            partition = method.partition ?: return@let,
-                            lkm = lkmSelection,
-                            allowShell = allowShell,
-                            enableAdb = enableAdb,
-                            backup = forceBackup
-                        )
-                        else -> FlashIt.FlashBoot(
-                            boot = if (method is InstallMethod.SelectFile) method.uri else null,
-                            lkm = lkmSelection,
-                            ota = method is InstallMethod.DirectInstallToInactiveSlot,
-                            partition = partitions.getOrNull(partitionSelectionIndex),
-                            allowShell = allowShell,
-                            enableAdb = enableAdb,
-                            backup = method is InstallMethod.SelectFile && forceBackup
-                        )
-                    }
-                )
+    val startFlash: (InstallMethod) -> Unit = flash@{ method ->
+        val target = when (method) {
+            is InstallMethod.DownloadFile -> FlashIt.DownloadBoot(
+                url = method.url ?: return@flash,
+                partition = method.partition ?: return@flash,
+                lkm = lkmSelection,
+                allowShell = allowShell,
+                enableAdb = enableAdb,
+                backup = forceBackup
+            )
+            else -> FlashIt.FlashBoot(
+                boot = if (method is InstallMethod.SelectFile) method.uri else null,
+                lkm = lkmSelection,
+                ota = method is InstallMethod.DirectInstallToInactiveSlot,
+                partition = partitions.getOrNull(partitionSelectionIndex),
+                allowShell = allowShell,
+                enableAdb = enableAdb,
+                backup = method is InstallMethod.SelectFile && forceBackup
             )
         }
+        navigator.push(Route.Flash(target))
     }
+
+    val onInstall: () -> Unit = {
+        installMethod?.let { method ->
+            when {
+                // 越狱模式下最后一次兜底拦截：写分区的安装方式（直接安装除外）不放行
+                method.blockedInJailbreak(jailbreakMode) -> showMessage(partitionWriteBlockedTip)
+                // 直接安装会真的刷写 boot 分区，刷之前再问一次 BL 是否已解锁
+                jailbreakMode && method is InstallMethod.DirectInstall && !bootloaderWarningAcknowledged ->
+                    showBootloaderWarning = true
+                else -> startFlash(method)
+            }
+        }
+    }
+
+    val bootloaderWarningContent = rememberBootloaderWarningContent(
+        message = stringResource(R.string.bootloader_warning_direct_install_message),
+        confirm = stringResource(R.string.bootloader_warning_confirm_flash),
+    )
+    BootloaderWarningDialog(
+        show = showBootloaderWarning,
+        content = bootloaderWarningContent,
+        onConfirm = {
+            showBootloaderWarning = false
+            bootloaderWarningAcknowledged = true
+            installMethod?.let { startFlash(it) }
+        },
+        onDismiss = { showBootloaderWarning = false },
+    )
 
     ChooseKmiDialog(
         show = showChooseKmiDialog.value,
@@ -271,10 +294,12 @@ fun InstallScreen() {
     val actions = InstallScreenActions(
         onBack = dropUnlessResumed { navigator.pop() },
         onSelectMethod = { method ->
-            if (jailbreakMode && method.writesPartition) {
+            if (method.blockedInJailbreak(jailbreakMode)) {
                 showMessage(partitionWriteBlockedTip)
             } else {
                 installMethod = method
+                // 换一种安装方式就重新确认一次，别让上一次的确认替这次背书
+                bootloaderWarningAcknowledged = false
             }
         },
         onDownloadFile = {

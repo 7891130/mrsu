@@ -408,4 +408,13 @@
     <string name="kpm_last_result">最近结果</string>
     <string name="kpm_insmod_ko">加载 .ko 内核模块</string>
     <string name="kpm_note">临时加载的模块重启后失效；开机加载的模块每次开机自动载入。</string>
+    <!-- Jailbreak mode: ask about the bootloader before entering install, and again before flashing. -->
+    <string name="bootloader_warning_title">Warning</string>
+    <string name="bootloader_warning_message">Please confirm the device bootloader is unlocked before flashing.</string>
+    <string name="bootloader_warning_direct_install_message">This will patch and flash the boot partition of the current device.</string>
+    <string name="bootloader_warning_point_avb">A locked bootloader rejects the modified boot image: the AVB check fails and the device will not boot.</string>
+    <string name="bootloader_warning_point_data">Unlocking the bootloader erases all data on the device.</string>
+    <string name="bootloader_warning_confirm">Bootloader unlocked, continue</string>
+    <string name="bootloader_warning_confirm_flash">Confirm and flash</string>
+    <string name="bootloader_warning_dismiss">Cancel</string>
 </resources>

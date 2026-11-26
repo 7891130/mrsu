@@ -284,11 +284,8 @@ private fun StatusCard(
             color = containerColor,
             contentColor = Color.White,
             shape = MaterialTheme.shapes.large,
-            onClick = {
-                if (!state.isLateLoadMode) {
-                    actions.onInstallClick()
-                }
-            }
+            // 越狱模式下也能点：HomeScreen 会先弹「已解锁 BL？」的确认，确认后才进安装页。
+            onClick = { actions.onInstallClick() }
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 Image(

@@ -384,4 +384,12 @@
     <string name="script_param_below_min">不能小于 %d</string>
     <string name="script_param_above_max">不能大于 %d</string>
     <string name="script_param_invalid">无效的值</string>
+    <string name="bootloader_warning_title">警告</string>
+    <string name="bootloader_warning_message">请确认设备已解锁 BL 才能刷入。</string>
+    <string name="bootloader_warning_direct_install_message">即将修补并刷写当前设备的 boot 分区。</string>
+    <string name="bootloader_warning_point_avb">未解锁 BL 的设备会拒绝被修改的 boot 镜像：AVB 校验失败，设备将无法开机。</string>
+    <string name="bootloader_warning_point_data">解锁 BL 会清空设备上的全部数据。</string>
+    <string name="bootloader_warning_confirm">已解锁，继续</string>
+    <string name="bootloader_warning_confirm_flash">确认刷入</string>
+    <string name="bootloader_warning_dismiss">取消</string>
 </resources>

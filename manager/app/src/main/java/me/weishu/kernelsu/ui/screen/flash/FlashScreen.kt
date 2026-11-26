@@ -38,18 +38,18 @@ fun FlashScreen(flashIt: FlashIt, onBackEnabledChange: (Boolean) -> Unit) {
     var showRebootAction by rememberSaveable { mutableStateOf(false) }
     var flashingStatus by rememberSaveable { mutableStateOf(FlashingStatus.FLASHING) }
     val jailbreakMode = Natives.isLateLoadMode
-    val needJailbreakWarning = flashIt is FlashIt.FlashBoot && jailbreakMode
-    // 越狱模式运行在已锁定 BL 上，写 boot / 恢复原厂镜像会直接变砖，因此整条流程禁止进入
-    val partitionWriteBlocked = jailbreakMode && (
+    // 越狱模式下的「直接安装」（不带 boot 镜像，由 ksud 现刷当前分区）是用户要的正路：
+    // 进来之前已经在首页和安装页各确认过一次「BL 已解锁」，这里不再第三次弹窗。
+    // 其它会写 boot 的动作（指定镜像 / 下载镜像 / 恢复原厂）依旧一律禁止。
+    val directInstallInJailbreak = jailbreakMode && flashIt is FlashIt.FlashBoot && flashIt.boot == null
+    val partitionWriteBlocked = jailbreakMode && !directInstallInJailbreak && (
         flashIt is FlashIt.FlashBoot ||
             flashIt is FlashIt.DownloadBoot ||
             flashIt == FlashIt.FlashRestore
         )
     // Soft reboot keeps the jailbreak and still applies modules
     val softReboot = flashIt is FlashIt.FlashModules && isSoftRebootPreferred()
-    var flashingEnabled by rememberSaveable {
-        mutableStateOf(!needJailbreakWarning && !partitionWriteBlocked)
-    }
+    var flashingEnabled by rememberSaveable { mutableStateOf(!partitionWriteBlocked) }
     val uiMode = LocalUiMode.current
     val snackbarHost = remember { SnackbarHostState() }
     val backEnabled = flashingStatus != FlashingStatus.FLASHING || partitionWriteBlocked
@@ -94,7 +94,6 @@ fun FlashScreen(flashIt: FlashIt, onBackEnabledChange: (Boolean) -> Unit) {
         text = text,
         showRebootAction = showRebootAction,
         flashingStatus = flashingStatus,
-        showJailbreakWarning = needJailbreakWarning && !flashingEnabled && !partitionWriteBlocked,
         rebootLabelRes = if (softReboot) R.string.reboot_soft else R.string.reboot,
     )
     val actions = FlashScreenActions(
@@ -107,8 +106,6 @@ fun FlashScreen(flashIt: FlashIt, onBackEnabledChange: (Boolean) -> Unit) {
                 }
             }
         },
-        onConfirmJailbreakWarning = { flashingEnabled = true },
-        onDismissJailbreakWarning = dropUnlessResumed { navigator.pop() },
     )
 
     when (LocalUiMode.current) {

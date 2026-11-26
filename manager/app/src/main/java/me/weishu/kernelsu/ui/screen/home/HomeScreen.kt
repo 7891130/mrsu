@@ -12,6 +12,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -24,6 +25,8 @@ import me.weishu.kernelsu.R
 import me.weishu.kernelsu.magica.MagicaService
 import me.weishu.kernelsu.ui.LocalUiMode
 import me.weishu.kernelsu.ui.UiMode
+import me.weishu.kernelsu.ui.component.dialog.BootloaderWarningDialog
+import me.weishu.kernelsu.ui.component.dialog.rememberBootloaderWarningContent
 import me.weishu.kernelsu.ui.component.dialog.rememberConfirmDialog
 import me.weishu.kernelsu.ui.component.dialog.rememberLoadingDialog
 import me.weishu.kernelsu.ui.navigation3.Navigator
@@ -70,6 +73,21 @@ fun HomePager(
         }
     }
 
+    var showBootloaderWarning by rememberSaveable { mutableStateOf(false) }
+    val bootloaderWarning = rememberBootloaderWarningContent(
+        message = stringResource(R.string.bootloader_warning_message),
+        confirm = stringResource(R.string.bootloader_warning_confirm),
+    )
+    BootloaderWarningDialog(
+        show = showBootloaderWarning,
+        content = bootloaderWarning,
+        onConfirm = {
+            showBootloaderWarning = false
+            navigator.push(Route.Install)
+        },
+        onDismiss = { showBootloaderWarning = false },
+    )
+
     LifecycleResumeEffect(Unit) {
         if (initialResumeHandled.value && latestIsCurrentPage) {
             viewModel.refresh()
@@ -79,7 +97,15 @@ fun HomePager(
     }
 
     val actions = HomeActions(
-        onInstallClick = { navigator.push(Route.Install) },
+        onInstallClick = {
+            if (uiState.isLateLoadMode) {
+                // 越狱模式跑在已锁 BL 的设备上，进安装页之前先确认一次；
+                // 真正的刷写确认在安装页里「直接安装」时再来一次。
+                showBootloaderWarning = true
+            } else {
+                navigator.push(Route.Install)
+            }
+        },
         onOpenUrl = uriHandler::openUri,
         onJailbreakClick = {
             loadingDialog.showLoading()
