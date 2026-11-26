@@ -391,6 +391,7 @@
     <string name="script_param_above_max">Must be at most %d</string>
     <string name="script_param_invalid">Invalid value</string>
     <string name="home_author">作者：明小日</string>
+    <string name="kpm_tab">KPM</string>
     <string name="kpm_title">KernelPatch 模块</string>
     <string name="settings_kpm">KernelPatch 模块</string>
     <string name="settings_kpm_summary">加载 .kpm 模块，可临时或开机加载</string>

@@ -139,7 +139,7 @@ enum class BottomBarDestination(
 ) {
     Home(R.string.home, Icons.Rounded.Cottage),
     SuperUser(R.string.superuser, Icons.Rounded.Security),
-    Kpm(R.string.kpm_title, Icons.Rounded.Build),
+    Kpm(R.string.kpm_tab, Icons.Rounded.Build),
     Module(R.string.module, Icons.Rounded.Extension),
     Setting(R.string.settings, Icons.Rounded.Settings)
 }
