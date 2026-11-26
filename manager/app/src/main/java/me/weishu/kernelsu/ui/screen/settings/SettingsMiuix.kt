@@ -186,20 +186,6 @@ fun SettingPagerMiuix(
                                 .padding(top = 12.dp)
                                 .fillMaxWidth(),
                         ) {
-                        val kpmTitle = stringResource(id = R.string.settings_kpm)
-                        ArrowPreference(
-                            title = kpmTitle,
-                            summary = stringResource(id = R.string.settings_kpm_summary),
-                            startAction = {
-                                Icon(
-                                    Icons.Rounded.Extension,
-                                    modifier = Modifier.padding(end = 6.dp),
-                                    contentDescription = kpmTitle,
-                                    tint = colorScheme.onBackground
-                                )
-                            },
-                            onClick = actions.onOpenKpm
-                        )
                             val profileTemplate = stringResource(id = R.string.settings_profile_template)
                             ArrowPreference(
                                 title = profileTemplate,

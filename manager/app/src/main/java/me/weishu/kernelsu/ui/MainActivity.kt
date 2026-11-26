@@ -92,7 +92,7 @@ import me.weishu.kernelsu.ui.screen.modulerepo.ModuleRepoDetailScreen
 import me.weishu.kernelsu.ui.screen.modulerepo.ModuleRepoScreen
 import me.weishu.kernelsu.ui.screen.scriptrun.ScriptRunScreen
 import me.weishu.kernelsu.ui.screen.settings.SettingPager
-import me.weishu.kernelsu.ui.screen.kpm.KpmScreen
+import me.weishu.kernelsu.ui.screen.kpm.KpmPager
 import me.weishu.kernelsu.ui.screen.sulog.SulogScreen
 import me.weishu.kernelsu.ui.screen.superuser.SuperUserPager
 import me.weishu.kernelsu.ui.screen.template.AppProfileTemplateScreen
@@ -263,7 +263,6 @@ class MainActivity : ComponentActivity() {
                             entry<Route.Main>(swipeDismiss = swipeDismiss) { pageBackground { mainScreenEntry() } }
                             entry<Route.About>(swipeDismiss = swipeDismiss) { pageBackground { AboutScreen() } }
                             entry<Route.Sulog>(swipeDismiss = swipeDismiss) { pageBackground { SulogScreen() } }
-                            entry<Route.Kpm>(swipeDismiss = swipeDismiss) { pageBackground { KpmScreen() } }
                             entry<Route.ColorPalette>(swipeDismiss = swipeDismiss) { pageBackground { ColorPaletteScreen() } }
                             entry<Route.BackgroundCrop>(swipeDismiss = swipeDismiss) { key -> pageBackground { BackgroundCropScreen(key.uri) } }
                             entry<Route.AppProfileTemplate>(swipeDismiss = swipeDismiss) { pageBackground { AppProfileTemplateScreen() } }
@@ -480,8 +479,9 @@ fun MainScreen(
                     when (page) {
                         0 -> if (contentReady || isCurrentPage) HomePager(navController, bottomInnerPadding, isCurrentPage)
                         1 -> if (contentReady || isCurrentPage) SuperUserPager(navController, bottomInnerPadding, isCurrentPage)
-                        2 -> if (contentReady || isCurrentPage) ModulePager(bottomInnerPadding, isCurrentPage)
-                        3 -> if (contentReady || isCurrentPage) SettingPager(navController, bottomInnerPadding, isCurrentPage)
+                        2 -> if (contentReady || isCurrentPage) KpmPager(bottomInnerPadding, isCurrentPage)
+                        3 -> if (contentReady || isCurrentPage) ModulePager(bottomInnerPadding, isCurrentPage)
+                        4 -> if (contentReady || isCurrentPage) SettingPager(navController, bottomInnerPadding, isCurrentPage)
                     }
                 }
             }

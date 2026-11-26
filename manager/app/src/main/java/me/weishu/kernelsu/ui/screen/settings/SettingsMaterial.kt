@@ -150,27 +150,6 @@ fun SettingPagerMaterial(
                     }
                 }
             )
-
-            val kpmTitle = stringResource(id = R.string.settings_kpm)
-            KsuIsValid {
-                SegmentedColumn(
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 13.dp),
-                    content = listOf {
-                        SegmentedListItem(
-                            onClick = actions.onOpenKpm,
-                            headlineContent = { Text(kpmTitle) },
-                            supportingContent = { Text(stringResource(id = R.string.settings_kpm_summary)) },
-                            leadingContent = { Icon(Icons.Filled.Extension, kpmTitle) },
-                            trailingContent = {
-                                Icon(
-                                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                    null
-                                )
-                            }
-                        )
-                    }
-                )
-            }
             val profileTemplate = stringResource(id = R.string.settings_profile_template)
             KsuIsValid {
                 SegmentedColumn(

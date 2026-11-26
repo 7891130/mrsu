@@ -229,6 +229,15 @@ fun kpmLoadReport(path: String): String = runKsud("kpm load ${shellQuote(path)}"
 /** Stage a .kpm for boot and return the report. */
 fun kpmStageReport(path: String): String = runKsud("kpm stage ${shellQuote(path)}")
 
+/** Unload a loaded .kpm and return the report. */
+fun kpmUnloadReport(name: String): String = runKsud("kpm unload ${shellQuote(name)}")
+
+/** Show a loaded module's details. */
+fun kpmInfoReport(name: String): String = runKsud("kpm info ${shellQuote(name)}")
+
+/** Stop loading a staged .kpm on boot, returning the report. */
+fun kpmUnstageReport(name: String): String = runKsud("kpm unstage ${shellQuote(name)}")
+
 /** Load a plain kernel module (.ko) with symbol resolution, for the report. */
 fun insmodReport(path: String): String = runKsud("insmod ${shellQuote(path)}")
 

@@ -391,17 +391,20 @@
     <string name="script_param_above_max">Must be at most %d</string>
     <string name="script_param_invalid">Invalid value</string>
     <string name="home_author">作者：明小日</string>
-    <string name="kpm_title">KernelPatch modules</string>
-    <string name="settings_kpm">KernelPatch modules</string>
-    <string name="settings_kpm_summary">Load .kpm modules, temporarily or at boot</string>
-    <string name="kpm_loaded">Loaded</string>
-    <string name="kpm_empty">No kernel patch module loaded.</string>
-    <string name="kpm_staged">Staged for boot</string>
-    <string name="kpm_staged_empty">Nothing staged.</string>
-    <string name="kpm_refresh">Refresh</string>
-    <string name="kpm_unstage">Remove from boot</string>
-    <string name="kpm_load_now">Load now</string>
-    <string name="kpm_stage_for_boot">Add to boot</string>
-    <string name="kpm_last_result">Last result</string>`n    <string name="kpm_insmod_ko">Load .ko into the kernel (insmod)</string>
-    <string name="kpm_note">Temporary modules are lost on reboot; staged ones load at boot.</string>
+    <string name="kpm_title">KernelPatch 模块</string>
+    <string name="settings_kpm">KernelPatch 模块</string>
+    <string name="settings_kpm_summary">加载 .kpm 模块，可临时或开机加载</string>
+    <string name="kpm_loaded">已加载</string>
+    <string name="kpm_empty">暂无已加载的模块</string>
+    <string name="kpm_staged">开机加载</string>
+    <string name="kpm_staged_empty">暂无开机加载项</string>
+    <string name="kpm_refresh">刷新</string>
+    <string name="kpm_unload">卸载</string>
+    <string name="kpm_info">详情</string>
+    <string name="kpm_unstage">取消开机</string>
+    <string name="kpm_load_now">立即加载</string>
+    <string name="kpm_stage_for_boot">开机加载</string>
+    <string name="kpm_last_result">最近结果</string>
+    <string name="kpm_insmod_ko">加载 .ko 内核模块</string>
+    <string name="kpm_note">临时加载的模块重启后失效；开机加载的模块每次开机自动载入。</string>
 </resources>

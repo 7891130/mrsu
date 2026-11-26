@@ -31,20 +31,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.dropUnlessResumed
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import me.weishu.kernelsu.R
-import me.weishu.kernelsu.ui.navigation3.LocalNavigator
 import me.weishu.kernelsu.ui.util.getFileName
 import me.weishu.kernelsu.ui.util.insmodReport
+import me.weishu.kernelsu.ui.util.kpmInfoReport
 import me.weishu.kernelsu.ui.util.kpmList
 import me.weishu.kernelsu.ui.util.kpmLoadReport
 import me.weishu.kernelsu.ui.util.kpmStageReport
 import me.weishu.kernelsu.ui.util.kpmStaged
-import me.weishu.kernelsu.ui.util.kpmUnstage
+import me.weishu.kernelsu.ui.util.kpmUnloadReport
+import me.weishu.kernelsu.ui.util.kpmUnstageReport
 import java.io.File
 
 /** What to do with a picked file. */
@@ -62,15 +63,17 @@ private fun Uri.copyIntoCache(context: Context): String {
 }
 
 /**
- * KernelPatch module (.kpm) overview.
+ * KernelPatch 模块（.kpm）主界面，位于底部导航的「超级用户」之后。
  *
- * Everything goes through `ksud kpm ...` in a root shell, the same channel the
- * module list uses. The runtime reports failures (unknown symbol, bad image,
- * unsupported relocation) on that channel, so the text is shown as-is.
+ * 所有操作都通过 root shell 调 `ksud kpm ...`，和模块列表用的是同一条通道。
+ * 运行时的失败原因（未知符号、镜像不合法、重定位不支持）会原样显示，
+ * 因为这类信息对用户排障最有用。
  */
 @Composable
-fun KpmScreen() {
-    val navigator = LocalNavigator.current
+fun KpmPager(
+    bottomInnerPadding: Dp,
+    isCurrentPage: Boolean = true,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -88,23 +91,26 @@ fun KpmScreen() {
         }
     }
 
-    LaunchedEffect(reloadToken) { refresh() }
+    LaunchedEffect(reloadToken, isCurrentPage) {
+        if (isCurrentPage) refresh()
+    }
+
+    fun runAction(block: () -> String) {
+        scope.launch {
+            resultText = withContext(Dispatchers.IO) { runCatching(block).getOrElse { it.message ?: it.toString() } }
+            reloadToken++
+        }
+    }
 
     fun handlePicked(uri: Uri?, mode: PickedMode) {
         if (uri == null) return
-        scope.launch {
-            val report = withContext(Dispatchers.IO) {
-                runCatching {
-                    val path = uri.copyIntoCache(context)
-                    when (mode) {
-                        PickedMode.LoadKpm -> kpmLoadReport(path)
-                        PickedMode.StageKpm -> kpmStageReport(path)
-                        PickedMode.InsmodKo -> insmodReport(path)
-                    }
-                }.getOrElse { it.message ?: it.toString() }
+        runAction {
+            val path = uri.copyIntoCache(context)
+            when (mode) {
+                PickedMode.LoadKpm -> kpmLoadReport(path)
+                PickedMode.StageKpm -> kpmStageReport(path)
+                PickedMode.InsmodKo -> insmodReport(path)
             }
-            resultText = report
-            reloadToken++
         }
     }
 
@@ -122,7 +128,7 @@ fun KpmScreen() {
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = bottomInnerPadding + 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(
@@ -134,13 +140,8 @@ fun KpmScreen() {
                 text = stringResource(R.string.kpm_title),
                 style = MaterialTheme.typography.titleLarge,
             )
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = { reloadToken++ }) {
-                    Text(stringResource(R.string.kpm_refresh))
-                }
-                TextButton(onClick = dropUnlessResumed { navigator.pop() }) {
-                    Text(stringResource(R.string.close))
-                }
+            TextButton(onClick = { reloadToken++ }) {
+                Text(stringResource(R.string.kpm_refresh))
             }
         }
 
@@ -185,19 +186,30 @@ fun KpmScreen() {
             } else {
                 text.lineSequence().filter { it.isNotBlank() }.forEach { line ->
                     val parts = line.split('\t')
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = parts.firstOrNull().orEmpty(),
-                            style = MaterialTheme.typography.bodyLarge,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
-                        )
-                        if (parts.size > 1) {
-                            Text(text = parts[1], style = MaterialTheme.typography.bodySmall)
+                    val name = parts.firstOrNull().orEmpty()
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = name,
+                                style = MaterialTheme.typography.bodyLarge,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                            if (parts.size > 1) {
+                                Text(text = parts[1], style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TextButton(onClick = { runAction { kpmInfoReport(name) } }) {
+                                Text(stringResource(R.string.kpm_info))
+                            }
+                            TextButton(onClick = { runAction { kpmUnloadReport(name) } }) {
+                                Text(stringResource(R.string.kpm_unload))
+                            }
                         }
                     }
                 }
@@ -224,14 +236,7 @@ fun KpmScreen() {
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false),
                         )
-                        TextButton(
-                            onClick = {
-                                scope.launch {
-                                    withContext(Dispatchers.IO) { kpmUnstage(line) }
-                                    reloadToken++
-                                }
-                            },
-                        ) {
+                        TextButton(onClick = { runAction { kpmUnstageReport(line) } }) {
                             Text(stringResource(R.string.kpm_unstage))
                         }
                     }
