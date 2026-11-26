@@ -7,6 +7,7 @@
 #include "klog.h" // IWYU pragma: keep
 #include "kpm/kpm_kfunc.h"
 #include "kpm/kpm_kfunc_btf.h"
+#include "kpm/kpm_kfunc_syscall.h"
 #include "kpm/kpm_kfunc_hook.h"
 #include "kpm/kpm_symbol.h"
 
@@ -49,6 +50,9 @@ static const struct kpm_kfunc kpm_kfuncs[] = {
     { .name = "kp_btf_member", .addr = (unsigned long)&kpm_kf_btf_member },
     { .name = "kp_btf_member_offset", .addr = (unsigned long)&kpm_kf_btf_member_offset },
     { .name = "kp_btf_skip_mod", .addr = (unsigned long)&kpm_kf_btf_skip_mod },
+    { .name = "syscalln_addr", .addr = (unsigned long)&kpm_kf_syscalln_addr },
+    { .name = "syscalln_name_addr", .addr = (unsigned long)&kpm_kf_syscalln_name_addr },
+    { .name = "_task_pt_reg", .addr = (unsigned long)&kpm_kf_task_pt_reg },
     /* data symbol: modules read the encoded kernel version */
     { .name = "kver", .addr = (unsigned long)&kpm_kver },
 };
