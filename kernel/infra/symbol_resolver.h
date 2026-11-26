@@ -5,6 +5,8 @@
 
 void *ksu_resolve_symbol_for_functable_hook(const char *symbol_name);
 unsigned long find_kernel_symbol_exact(const char *symbol_name);
+/* Like the above, but also accepts symbols that belong to a module. */
+unsigned long find_any_symbol_exact(const char *symbol_name);
 int ksu_lookup_kernel_symbols(const char *const *names, unsigned long *addrs, u32 count);
 void ksu_init_symbol_resolver();
 

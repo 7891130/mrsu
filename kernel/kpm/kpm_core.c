@@ -1,279 +1,178 @@
-#include <linux/err.h>
 #include <linux/errno.h>
-#include <linux/file.h>
-#include <linux/fs.h>
 #include <linux/kernel.h>
-#include <linux/mm.h>
 #include <linux/mutex.h>
-#include <linux/slab.h>
-#include <linux/string.h>
 #include <linux/types.h>
-#include <linux/uaccess.h>
-#include <linux/vmalloc.h>
 
 #include "klog.h" // IWYU pragma: keep
 #include "kpm/kpm.h"
+#include "kpm/kpm_provider.h"
+#include "kpm/kpm_table.h"
 #include "policy/feature.h"
-#include "uapi/ksu.h"
 
-#define KPM_MAX_IMAGE KSU_KPM_MAX_IMAGE
-
-static LIST_HEAD(kpm_modules);
-static DEFINE_MUTEX(kpm_mutex);
+/*
+ * Routing layer between KernelSU's control channel (KSU_IOCTL_KPM, boot events)
+ * and the module table.
+ *
+ * The table itself lives in kpm_table.c and knows nothing about KernelSU, so it
+ * can be linked into kpm.ko as well. Whoever owns it -- kernelsu.ko by default,
+ * or a kpm.ko that registered its ops -- receives the commands. This file keeps
+ * the two things that must stay KernelSU's regardless of the owner: the feature
+ * gate and the ioctl entry point.
+ */
 static bool kpm_enabled = true;
 
-static void kpm_set_err(char *err, size_t err_len, const char *msg)
-{
-    if (err && err_len)
-        snprintf(err, err_len, "%s", msg);
-}
+/* NULL means "serve from the table inside kernelsu.ko". */
+static const struct kpm_ops *kpm_owner;
+static DEFINE_MUTEX(kpm_owner_mutex);
 
-static struct kpm_module *kpm_find_locked(const char *name)
+/**
+ * ksu_kpm_register_ops - take over the KPM control channel
+ * @ops: ops implemented by the registering module (kpm.ko)
+ *
+ * Refused with -EBUSY when an owner is already registered, and also when the
+ * built-in table already holds modules: two live tables would silently
+ * diverge, and the modules in the built-in one would become invisible.
+ *
+ * Return: 0 on success, -EINVAL for a malformed ops struct, -EBUSY as above.
+ */
+int ksu_kpm_register_ops(const struct kpm_ops *ops)
 {
-    struct kpm_module *pos;
+    int ret = 0;
 
-    list_for_each_entry(pos, &kpm_modules, list) {
-        if (!strcmp(pos->name, name))
-            return pos;
+    if (!ops || ops->magic != KPM_OPS_MAGIC || ops->version != KPM_OPS_VERSION || !ops->name ||
+        !ops->load || !ops->unload || !ops->list || !ops->info)
+        return -EINVAL;
+
+    mutex_lock(&kpm_owner_mutex);
+    if (kpm_owner) {
+        pr_warn("kpm: %s cannot take the control channel, %s holds it\n", ops->name,
+                kpm_owner->name);
+        ret = -EBUSY;
+    } else if (!kpm_table_is_empty()) {
+        pr_warn("kpm: %s cannot take the control channel, the built-in table is in use\n",
+                ops->name);
+        ret = -EBUSY;
+    } else {
+        kpm_owner = ops;
+        pr_info("kpm: control channel now served by %s\n", ops->name);
     }
-    return NULL;
+    mutex_unlock(&kpm_owner_mutex);
+
+    return ret;
 }
 
-static bool kpm_name_exists(const char *name)
+/**
+ * ksu_kpm_unregister_ops - give the control channel back
+ * @ops: the owner to remove; NULL drops whoever is registered
+ *
+ * Called from the owner's module_exit, so the mutex guarantees no command is
+ * still running inside the (about to disappear) module when this returns.
+ */
+void ksu_kpm_unregister_ops(const struct kpm_ops *ops)
 {
-    bool exists;
-
-    mutex_lock(&kpm_mutex);
-    exists = kpm_find_locked(name) != NULL;
-    mutex_unlock(&kpm_mutex);
-
-    return exists;
-}
-
-static void kpm_release_locked(struct kpm_module *mod)
-{
-    if (mod->exit) {
-        pr_info("kpm: calling exit of %s\n", mod->name);
-        mod->exit(NULL);
+    mutex_lock(&kpm_owner_mutex);
+    if (kpm_owner && (!ops || kpm_owner == ops)) {
+        pr_info("kpm: %s released the control channel\n", kpm_owner->name);
+        kpm_owner = NULL;
     }
-    kpm_elf_release(mod);
-    kfree(mod->args);
-    kfree(mod);
+    mutex_unlock(&kpm_owner_mutex);
 }
 
 int kpm_load_path(const char *path, const char *args, char *err, size_t err_len)
 {
-    struct kpm_module *mod = NULL;
-    struct file *filp;
-    void *buf = NULL;
-    loff_t size, pos = 0;
-    ssize_t read;
+    const struct kpm_ops *ops;
     int ret;
 
     if (!kpm_enabled) {
         kpm_set_err(err, err_len, "kpm feature is disabled");
         return -EPERM;
     }
-    if (!path || path[0] != '/') {
-        kpm_set_err(err, err_len, "invalid module path");
-        return -EINVAL;
-    }
-    if (args && strlen(args) >= KPM_ARGS_MAX) {
-        kpm_set_err(err, err_len, "module args too long");
-        return -EINVAL;
-    }
 
-    filp = filp_open(path, O_RDONLY, 0);
-    if (IS_ERR(filp)) {
-        ret = PTR_ERR(filp);
-        kpm_set_err(err, err_len, "open module file failed");
-        return ret;
-    }
+    mutex_lock(&kpm_owner_mutex);
+    ops = kpm_owner;
+    ret = ops ? ops->load(path, args, err, err_len) : kpm_table_load(path, args, err, err_len);
+    mutex_unlock(&kpm_owner_mutex);
 
-    size = i_size_read(file_inode(filp));
-    if (size <= 0 || size > KPM_MAX_IMAGE) {
-        ret = -EFBIG;
-        kpm_set_err(err, err_len, "module file size is invalid");
-        goto out_close;
-    }
-
-    buf = vmalloc(size);
-    if (!buf) {
-        ret = -ENOMEM;
-        kpm_set_err(err, err_len, "allocate module buffer failed");
-        goto out_close;
-    }
-
-    read = kernel_read(filp, buf, size, &pos);
-    if (read != size) {
-        ret = -EIO;
-        kpm_set_err(err, err_len, "read module file failed");
-        goto out_free;
-    }
-    filp_close(filp, NULL);
-    filp = NULL;
-
-    mod = kzalloc(sizeof(*mod), GFP_KERNEL);
-    if (!mod) {
-        ret = -ENOMEM;
-        kpm_set_err(err, err_len, "allocate module state failed");
-        goto out_free;
-    }
-
-    ret = kpm_elf_load(mod, buf, size, args, kpm_name_exists, err, err_len);
-    if (ret) {
-        kfree(mod->args);
-        kfree(mod);
-        goto out_free;
-    }
-
-    mutex_lock(&kpm_mutex);
-    if (kpm_find_locked(mod->name)) {
-        mutex_unlock(&kpm_mutex);
-        ret = -EEXIST;
-        kpm_set_err(err, err_len, "module already loaded");
-        /* Lost a race with another load: undo what init already did. */
-        if (mod->exit)
-            mod->exit(NULL);
-        kpm_elf_release(mod);
-        kfree(mod->args);
-        kfree(mod);
-        goto out_free;
-    }
-    list_add_tail(&mod->list, &kpm_modules);
-    mutex_unlock(&kpm_mutex);
-
-    pr_info("kpm: loaded %s (%s)\n", mod->name, mod->version);
-    vfree(buf);
-    return 0;
-
-out_free:
-    vfree(buf);
-out_close:
-    if (filp && !IS_ERR(filp))
-        filp_close(filp, NULL);
     return ret;
 }
 
 int kpm_unload(const char *name)
 {
-    struct kpm_module *mod;
+    const struct kpm_ops *ops;
+    int ret;
 
-    if (!name || !name[0])
-        return -EINVAL;
+    mutex_lock(&kpm_owner_mutex);
+    ops = kpm_owner;
+    ret = ops ? ops->unload(name) : kpm_table_unload(name);
+    mutex_unlock(&kpm_owner_mutex);
 
-    mutex_lock(&kpm_mutex);
-    mod = kpm_find_locked(name);
-    if (!mod) {
-        mutex_unlock(&kpm_mutex);
-        return -ENOENT;
-    }
-    list_del(&mod->list);
-    mutex_unlock(&kpm_mutex);
-
-    pr_info("kpm: unloading %s\n", mod->name);
-    kpm_release_locked(mod);
-    return 0;
+    return ret;
 }
 
 int kpm_list(char *out, size_t size)
 {
-    struct kpm_module *pos;
-    size_t off = 0;
+    const struct kpm_ops *ops;
+    int ret;
 
-    if (!out || !size)
-        return -EINVAL;
-    out[0] = '\0';
+    mutex_lock(&kpm_owner_mutex);
+    ops = kpm_owner;
+    ret = ops ? ops->list(out, size) : kpm_table_list(out, size);
+    mutex_unlock(&kpm_owner_mutex);
 
-    mutex_lock(&kpm_mutex);
-    list_for_each_entry(pos, &kpm_modules, list) {
-        int n = snprintf(out + off, size - off, "%s\t%s\t%s\n", pos->name, pos->version,
-                         pos->args ? pos->args : "");
-        if (n < 0 || (size_t)n >= size - off)
-            break;
-        off += n;
-    }
-    mutex_unlock(&kpm_mutex);
-
-    return (int)off;
+    return ret;
 }
 
 int kpm_info(const char *name, char *out, size_t size)
 {
-    struct kpm_module *mod;
-    int n;
+    const struct kpm_ops *ops;
+    int ret;
 
-    if (!name || !name[0] || !out || !size)
-        return -EINVAL;
-    out[0] = '\0';
+    mutex_lock(&kpm_owner_mutex);
+    ops = kpm_owner;
+    ret = ops ? ops->info(name, out, size) : kpm_table_info(name, out, size);
+    mutex_unlock(&kpm_owner_mutex);
 
-    mutex_lock(&kpm_mutex);
-    mod = kpm_find_locked(name);
-    if (!mod) {
-        mutex_unlock(&kpm_mutex);
-        return -ENOENT;
-    }
-    n = snprintf(out, size,
-                 "name=%s\n"
-                 "version=%s\n"
-                 "license=%s\n"
-                 "author=%s\n"
-                 "description=%s\n"
-                 "args=%s\n"
-                 "has_ctl0=%d\n"
-                 "has_ctl1=%d\n"
-                 "has_event=%d\n",
-                 mod->name, mod->version, mod->license, mod->author, mod->description,
-                 mod->args ? mod->args : "", mod->ctl0 ? 1 : 0, mod->ctl1 ? 1 : 0, mod->event ? 1 : 0);
-    mutex_unlock(&kpm_mutex);
-
-    return n < 0 ? n : (int)min((size_t)n, size - 1);
+    return ret;
 }
 
 long kpm_ctl0(const char *name, const char *args, char __user *out, int outlen)
 {
-    struct kpm_module *mod;
+    const struct kpm_ops *ops;
     long ret;
 
-    if (!name || !name[0] || !args)
-        return -EINVAL;
-
-    mutex_lock(&kpm_mutex);
-    mod = kpm_find_locked(name);
-    if (!mod) {
-        mutex_unlock(&kpm_mutex);
-        return -ENOENT;
-    }
-    if (!mod->ctl0) {
-        mutex_unlock(&kpm_mutex);
-        return -ENOSYS;
-    }
-    ret = mod->ctl0(args, out, outlen);
-    mutex_unlock(&kpm_mutex);
+    mutex_lock(&kpm_owner_mutex);
+    ops = kpm_owner;
+    ret = ops ? ops->ctl0(name, args, out, outlen) : kpm_table_ctl0(name, args, out, outlen);
+    mutex_unlock(&kpm_owner_mutex);
 
     return ret;
 }
 
 long kpm_ctl1(const char *name, void *a1, void *a2, void *a3)
 {
-    struct kpm_module *mod;
+    const struct kpm_ops *ops;
     long ret;
 
-    if (!name || !name[0])
-        return -EINVAL;
+    mutex_lock(&kpm_owner_mutex);
+    ops = kpm_owner;
+    ret = ops ? ops->ctl1(name, a1, a2, a3) : kpm_table_ctl1(name, a1, a2, a3);
+    mutex_unlock(&kpm_owner_mutex);
 
-    mutex_lock(&kpm_mutex);
-    mod = kpm_find_locked(name);
-    if (!mod) {
-        mutex_unlock(&kpm_mutex);
-        return -ENOENT;
-    }
-    if (!mod->ctl1) {
-        mutex_unlock(&kpm_mutex);
-        return -ENOSYS;
-    }
-    ret = mod->ctl1(a1, a2, a3);
-    mutex_unlock(&kpm_mutex);
+    return ret;
+}
+
+int kpm_notify_event(const char *event, const char *args)
+{
+    const struct kpm_ops *ops;
+    int ret;
+
+    mutex_lock(&kpm_owner_mutex);
+    ops = kpm_owner;
+    if (ops && ops->notify_event)
+        ret = ops->notify_event(event, args);
+    else
+        ret = kpm_table_notify_event(event, args);
+    mutex_unlock(&kpm_owner_mutex);
 
     return ret;
 }
@@ -306,40 +205,9 @@ void __init kpm_runtime_init(void)
 
 void __exit kpm_runtime_exit(void)
 {
-    struct kpm_module *pos, *n;
-
-    mutex_lock(&kpm_mutex);
-    list_for_each_entry_safe(pos, n, &kpm_modules, list) {
-        list_del(&pos->list);
-        kpm_release_locked(pos);
-    }
-    mutex_unlock(&kpm_mutex);
+    /* Any registered owner lives in another module: drop the pointer first. */
+    ksu_kpm_unregister_ops(NULL);
+    kpm_table_release_all();
 
     ksu_unregister_feature_handler(KSU_FEATURE_KPM);
-}
-
-int kpm_notify_event(const char *event, const char *args)
-{
-    struct kpm_module *pos;
-    int count = 0;
-    int result = 0;
-
-    if (!event || !event[0])
-        return -EINVAL;
-
-    mutex_lock(&kpm_mutex);
-    list_for_each_entry(pos, &kpm_modules, list) {
-        int rc;
-
-        if (!pos->event)
-            continue;
-
-        rc = pos->event(event, args, NULL);
-        if (rc < 0 && !result)
-            result = rc;
-        count++;
-    }
-    mutex_unlock(&kpm_mutex);
-
-    return result ? result : count;
 }

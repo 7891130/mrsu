@@ -1,18 +1,23 @@
 name: KPM compile check
 
-# Compile-only check for the kernel side of the KPM runtime.
+# Verification for the kernel side of the KPM runtime.
 #
 # The release pipeline ships its inter-job artifacts through GitHub Release
 # assets, which makes it a poor verification target: a failing asset upload
-# cancels the whole matrix. This workflow only builds kernelsu.ko for every
-# KMI in the MRSU support matrix and reports the result, so a code change can
-# be validated independently of the artifact plumbing.
+# cancels the whole matrix. This workflow instead builds kernelsu.ko *and*
+# kpm.ko for every KMI in the MRSU support matrix, and runs the host unit
+# suites in kernel/kpm/tests, so a change can be validated independently of the
+# artifact plumbing.
+#
+# The repository is public, so these runs do not consume Actions minutes.
 
 on:
-  # Manual only for now: the account's Actions minutes are exhausted, so a push
-  # trigger would only produce red runs. Re-add a push trigger (or point
-  # runs-on at the self-hosted runner label) once a free runner is available.
   workflow_dispatch:
+  push:
+    paths:
+      - 'kernel/**'
+      - 'uapi/**'
+      - '.github/workflows/kpm-compile.yml'
 
 concurrency:
   group: kpm-compile-${{ github.ref }}
@@ -20,7 +25,7 @@ concurrency:
 
 jobs:
   compile:
-    name: kernelsu.ko (${{ matrix.kmi }})
+    name: kernelsu.ko + kpm.ko (${{ matrix.kmi }})
     runs-on: ubuntu-latest
     container:
       image: ghcr.io/ylarod/ddk-min:${{ matrix.kmi }}-20260828
@@ -42,13 +47,29 @@ jobs:
     - name: Checkout source code
       uses: actions/checkout@v7
 
-    - name: Build kernelsu.ko
+    - name: Build the modules
       working-directory: kernel
       run: |
         git config --global --add safe.directory "$GITHUB_WORKSPACE"
-        echo "=== Building kernelsu.ko for KMI: ${{ matrix.kmi }} ==="
+        echo "=== Building kernelsu.ko + kpm.ko for KMI: ${{ matrix.kmi }} ==="
         make clean >/dev/null 2>&1 || true
         CONFIG_KSU=m CC=clang make KSU_PACKAGE_NAME=com.mingri.ru \
           KSU_EXPECTED_SIZE=0x036d \
           KSU_EXPECTED_HASH=5ccb0ad242b96baea99ebdf96d6ee01875781a3784693d4299319155c9843f2d
         ls -l kernelsu.ko
+        # kpm.ko is built by the same make invocation; a red build here means
+        # the standalone runtime no longer compiles for this KMI.
+        ls -l kpm.ko
+
+  hosttests:
+    name: host unit tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout source code
+      uses: actions/checkout@v7
+
+    # Compiles the real kernel sources against stub headers and runs every
+    # suite; no kernel tree or device needed.
+    - name: Run the KPM host suites
+      run: bash kernel/kpm/tests/run.sh

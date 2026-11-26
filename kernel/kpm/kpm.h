@@ -2,6 +2,7 @@
 #define __KSU_H_KPM
 
 #include <linux/init.h>
+#include <linux/kernel.h> /* snprintf, used by kpm_set_err() below */
 #include <linux/list.h>
 #include <linux/mutex.h>
 #include <linux/types.h>
@@ -63,6 +64,18 @@ struct kpm_module {
 void __init kpm_runtime_init(void);
 void __exit kpm_runtime_exit(void);
 
+/*
+ * Diagnostic text for a failed operation. The control channel reports failures
+ * through `cmd.result` plus this buffer, so "unknown symbol: xxx" reaches the
+ * user instead of a bare errno. Shared by the routing layer (kpm_core.c) and
+ * the table (kpm_table.c).
+ */
+static inline void kpm_set_err(char *err, size_t err_len, const char *msg)
+{
+    if (err && err_len)
+        snprintf(err, err_len, "%s", msg);
+}
+
 /* exec memory */
 void *kpm_alloc_exec(size_t size);
 int kpm_protect_exec(void *addr, size_t size);
@@ -72,7 +85,12 @@ void kpm_free_exec(void *addr, size_t size);
 int kpm_elf_load(struct kpm_module *mod, const void *data, size_t len, const char *args,
                  kpm_name_exists_t name_exists, char *err, size_t err_len);
 void kpm_elf_release(struct kpm_module *mod);
-/* module table operations (called from the supercall dispatcher) */
+/*
+ * Module table operations, called from the supercall dispatcher and the boot
+ * event code. These route to whichever runtime owns the control channel: the
+ * table inside kernelsu.ko, or the one inside a kpm.ko that registered itself.
+ * The "kpm" feature gate lives here, so it covers both owners.
+ */
 int kpm_load_path(const char *path, const char *args, char *err, size_t err_len);
 int kpm_unload(const char *name);
 int kpm_list(char *out, size_t size);

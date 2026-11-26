@@ -81,6 +81,28 @@ unsigned long __nocfi find_kernel_symbol_exact(const char *symbol_name)
     return addr;
 }
 
+/*
+ * Same idea as find_kernel_symbol_exact(), except that symbols owned by a module
+ * are acceptable.
+ *
+ * Only used across our own modules: kpm.ko resolves the KPM control channel
+ * (ksu_kpm_register_ops) that kernelsu.ko provides. That symbol normally lives
+ * inside a module, which find_kernel_symbol_exact() deliberately refuses in
+ * order not to hook other people's modules -- hence this variant.
+ * Callers must know exactly which module they expect, because the lookup itself
+ * does not distinguish between an intended module and any other one.
+ */
+unsigned long __nocfi find_any_symbol_exact(const char *symbol_name)
+{
+    unsigned long addr;
+
+    addr = find_kernel_symbol_exact(symbol_name);
+    if (addr)
+        return addr;
+
+    return kallsyms_lookup_name(symbol_name);
+}
+
 static inline bool ksu_symbol_has_suffix(const char *name, size_t name_len, const char *suffix, size_t suffix_len)
 {
     return name_len >= suffix_len && strcmp(name + name_len - suffix_len, suffix) == 0;

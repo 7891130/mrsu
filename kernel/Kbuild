@@ -51,6 +51,7 @@ kernelsu-objs += sulog/fd.o
 
 kernelsu-objs += kpm/kpm_alloc.o
 kernelsu-objs += kpm/kpm_core.o
+kernelsu-objs += kpm/kpm_table.o
 kernelsu-objs += kpm/kpm_elf.o
 kernelsu-objs += kpm/kpm_hook.o
 kernelsu-objs += kpm/kpm_hook_chain.o
@@ -144,9 +145,12 @@ obj-$(CONFIG_KSU) += kernelsu.o
 # Standalone KPM runtime (kpm.ko).
 #
 # Loaded at runtime by the kpm4lkm KernelSU module, so KPM does not require a
-# boot image flash. kpm_core.o is deliberately absent: it registers a KernelSU
-# feature handler and is only meaningful inside kernelsu.ko. arm64 only -- the
-# hook engine's text patching is arch-specific.
+# boot image flash. kpm_core.o is deliberately absent: it owns KernelSU's side
+# of the control channel (feature handler + kpm_ops routing) and is only
+# meaningful inside kernelsu.ko. The module table itself lives in kpm_table.o,
+# which both modules link; kpm_standalone.o registers this copy with
+# kernelsu.ko at load time, so KSU_IOCTL_KPM reaches whichever one owns it.
+# arm64 only -- the hook engine's text patching is arch-specific.
 ifeq ($(CONFIG_ARM64),y)
 kpm-objs := kpm/kpm_alloc.o
 kpm-objs += kpm/kpm_elf.o
@@ -163,6 +167,7 @@ kpm-objs += kpm/kpm_kfunc_syscall.o
 kpm-objs += kpm/kpm_reloc.o
 kpm-objs += kpm/kpm_standalone.o
 kpm-objs += kpm/kpm_symbol.o
+kpm-objs += kpm/kpm_table.o
 kpm-objs += infra/symbol_resolver.o
 kpm-objs += hook/arm64/patch_memory.o
 obj-m += kpm.o
