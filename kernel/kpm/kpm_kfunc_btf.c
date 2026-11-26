@@ -101,7 +101,6 @@ int kpm_kf_btf_member(int type_id, int idx, const char **name_out, int *type_id_
     const struct btf *btf = kpm_btf();
     const struct btf_type *type;
     const struct btf_member *m;
-    u32 i;
 
     if (!btf || type_id <= 0 || idx < 0)
         return -EINVAL;
@@ -114,7 +113,8 @@ int kpm_kf_btf_member(int type_id, int idx, const char **name_out, int *type_id_
     if ((u32)idx >= BTF_INFO_VLEN(type->info))
         return -ENOENT;
 
-    m = btf_members(type) + idx;
+    /* btf_members() is not available on every target, so index by hand. */
+    m = (const struct btf_member *)(type + 1) + idx;
     if (name_out)
         *name_out = btf_name_by_offset(btf, m->name_off);
     if (type_id_out)
