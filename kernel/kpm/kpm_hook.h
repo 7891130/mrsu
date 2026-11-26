@@ -62,6 +62,17 @@ int kpm_hook_build(u64 target, const u32 *prologue, unsigned int count, u64 tram
 int kpm_hook_install(u64 target, u64 replacement, const char *owner, char *err, size_t err_len);
 int kpm_hook_uninstall(u64 target);
 
+/* Returns the replacement address, or 0 to abort; runs once the trampoline exists. */
+typedef u64 (*kpm_replacement_fn)(u64 trampoline_pc, void *arg);
+
+int kpm_hook_install_with(u64 target, kpm_replacement_fn build, void *arg, const char *owner, char *err,
+                          size_t err_len);
+
+/* before/after callbacks around the original; see kpm_hook_wrap.c. */
+int kpm_hook_wrap(u64 target, unsigned int argno, kpm_hook_before_t before, kpm_hook_after_t after, void *udata,
+                  char *err, size_t err_len);
+int kpm_hook_unwrap_remove(u64 target, kpm_hook_before_t before, kpm_hook_after_t after, int remove);
+
 /*
  * Error codes kpatch returns from hook(); .kpm modules compare against these
  * exact values, so they must not be renumbered.

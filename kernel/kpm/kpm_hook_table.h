@@ -24,6 +24,8 @@ struct kpm_hook_entry {
     u64 trampoline_pc;
     struct kpm_hook_plan plan;
     const char *owner;
+    /* Caller-owned state (e.g. the wrap context) freed on uninstall. */
+    void *priv;
 };
 
 void kpm_hook_table_init(void);
