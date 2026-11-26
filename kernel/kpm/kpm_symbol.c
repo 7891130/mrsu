@@ -5,7 +5,8 @@
 
 #include "infra/symbol_resolver.h"
 #include "klog.h" // IWYU pragma: keep
-#include "kpm/kpm_kfunc.h"`n#include "kpm/kpm_kfunc_hook.h"
+#include "kpm/kpm_kfunc.h"
+#include "kpm/kpm_kfunc_hook.h"
 #include "kpm/kpm_symbol.h"
 
 struct kpm_kfunc {
