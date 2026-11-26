@@ -37,6 +37,10 @@ static const struct kpm_kfunc kpm_kfuncs[] = {
     { .name = "unhook", .addr = (unsigned long)&kpm_kf_unhook },
     { .name = "fp_hook", .addr = (unsigned long)&kpm_kf_fp_hook },
     { .name = "fp_unhook", .addr = (unsigned long)&kpm_kf_fp_unhook },
+    { .name = "hook_wrap", .addr = (unsigned long)&kpm_kf_hook_wrap },
+    { .name = "hook_unwrap_remove", .addr = (unsigned long)&kpm_kf_hook_unwrap_remove },
+    { .name = "hook_chain_add", .addr = (unsigned long)&kpm_kf_hook_chain_add },
+    { .name = "hook_chain_remove", .addr = (unsigned long)&kpm_kf_hook_chain_remove },
     /* data symbol: modules read the encoded kernel version */
     { .name = "kver", .addr = (unsigned long)&kpm_kver },
 };

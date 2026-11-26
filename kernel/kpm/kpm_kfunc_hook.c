@@ -17,6 +17,7 @@
 #include "hook/patch_memory.h" /* ksu_patch_text */
 #include "klog.h"              // IWYU pragma: keep
 #include "kpm/kpm_hook.h"
+#include "kpm/kpm_hook_chain.h"
 #include "kpm/kpm_hook_table.h"
 
 int kpm_kf_hook(void *func, void *replace, void **backup)
@@ -95,4 +96,54 @@ void kpm_kf_fp_unhook(uintptr_t fp_addr, void *backup)
 
     if (ksu_patch_text((void *)fp_addr, &backup, sizeof(backup), KSU_PATCH_TEXT_FLUSH_DCACHE))
         pr_warn("kpm: fp_unhook 0x%llx failed\n", (unsigned long long)fp_addr);
+}
+
+int kpm_kf_hook_wrap(void *func, int argno, void *before, void *after, void *udata)
+{
+    char err[128] = { 0 };
+    int ret;
+
+    if (!func || (!before && !after) || argno < 0)
+        return KPM_HOOK_ERR_BAD_ADDRESS;
+
+    ret = kpm_hook_wrap((u64)(uintptr_t)func, (unsigned int)argno, (kpm_hook_before_t)before, (kpm_hook_after_t)after,
+                        udata, err, sizeof(err));
+    if (ret) {
+        pr_warn("kpm: hook_wrap 0x%llx failed: %s\n", (unsigned long long)(uintptr_t)func, err);
+        return kpm_hook_errno_to_kpatch(ret);
+    }
+
+    return KPM_HOOK_OK;
+}
+
+void kpm_kf_hook_unwrap_remove(void *func, void *before, void *after, int remove)
+{
+    if (!func)
+        return;
+
+    if (kpm_hook_unwrap_remove((u64)(uintptr_t)func, (kpm_hook_before_t)before, (kpm_hook_after_t)after, remove))
+        pr_warn("kpm: hook_unwrap_remove 0x%llx failed\n", (unsigned long long)(uintptr_t)func);
+}
+
+int kpm_kf_hook_chain_add(void *chain, void *before, void *after, void *udata)
+{
+    int ret;
+
+    if (!chain || (!before && !after))
+        return KPM_HOOK_ERR_BAD_ADDRESS;
+
+    ret = kpm_hook_chain_add((struct kpm_hook_chain *)chain, 0, (kpm_hook_before_t)before, (kpm_hook_after_t)after,
+                             udata);
+    if (ret)
+        return kpm_hook_errno_to_kpatch(ret);
+
+    return KPM_HOOK_OK;
+}
+
+void kpm_kf_hook_chain_remove(void *chain, void *before, void *after)
+{
+    if (!chain)
+        return;
+
+    kpm_hook_chain_remove((struct kpm_hook_chain *)chain, (kpm_hook_before_t)before, (kpm_hook_after_t)after);
 }
