@@ -369,7 +369,7 @@ int kpm_apply_relocations(Elf64_Shdr *sechdrs, unsigned int shnum, unsigned int 
     (void)sechdrs;
     (void)shnum;
     (void)symindex;
-    return -ENOTSUP;
+    return -EOPNOTSUPP;
 }
 
 #endif /* __aarch64__ */
