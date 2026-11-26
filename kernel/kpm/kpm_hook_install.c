@@ -55,7 +55,7 @@ static int kpm_hook_install_impl(u64 target, kpm_replacement_fn build, void *arg
     if (err && err_len)
         err[0] = '\0';
 
-    if (!target || !replacement) {
+    if (!target || !build) {
         set_err(err, err_len, "invalid hook target");
         return -EINVAL;
     }
