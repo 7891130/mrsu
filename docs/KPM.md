@@ -31,19 +31,36 @@ MRSU 在 KernelSU 之上实现了一套 KernelPatch Module（`.kpm`）运行时�
 7. icache 刷新、text 置只读；
 8. 调用 `.kpm.init`；失败则调 `.kpm.exit` 并回收。
 
-## 已提供的 kfunc（16 个）
+## 已提供的 kfunc（34 个）
 
+**符号与基础（9）**
 `symbol_lookup_name`、`kallsyms_lookup_name`、`compat_copy_to_user`（**返回已拷贝长度**，失败返回 0）、
 `compat_strncpy_from_user`、`current_uid`、`kp_symbol_count`、`kp_symbol_list`、
-`kp_feature_list`、`kver`（数据符号）、`hook`、`unhook`、`fp_hook`、`fp_unhook`。
+`kp_feature_list`、`kver`（数据符号）。
 
-`hook()` 的返回值是 kpatch 的 `hook_err_t`（0 / 4095 / 4094 / 4093 / 4092），
-不是内核 errno。
+**inline hook（4）**
+`hook`、`unhook`、`fp_hook`、`fp_unhook`。返回值为 kpatch 的 `hook_err_t`
+（0 / 4095 / 4094 / 4093 / 4092），不是内核 errno。
 
-没实现（模块引用会以 unknown symbol 失败，属预期）：`hook_wrap`/`hook_unwrap`/
-`hook_chain_*`、`syscall*` 系列、`kp_btf_*`/`kp_kconfig_*`，以及 APatch 专属的
-`su_*`/`kstorage_*`/`ap_mod_*`。
+**wrap hook（4）**
+`hook_wrap`、`hook_unwrap_remove`、`hook_chain_add`、`hook_chain_remove`。
+`argno` 最多 8（x0–x7），回调里改 `fargs->args[]` 会生效；`skip_origin` 置 1 可跳过原函数。
 
+**BTF（7）**
+`kp_btf_available`、`kp_btf_find_type`、`kp_btf_type_size`、`kp_btf_type_info`、
+`kp_btf_member`、`kp_btf_member_offset`、`kp_btf_skip_mod`。无 `CONFIG_DEBUG_INFO_BTF`
+时统一返回 `-EOPNOTSUPP`。
+
+**syscall（7）**
+`syscalln_addr`、`syscalln_name_addr`、`_task_pt_reg`（只读查询），
+`hook_syscalln`、`unhook_syscalln`、`hook_compat_syscalln`、`unhook_compat_syscalln`。
+`hook_syscalln` 是"查表拿到 handler 地址 → 对该地址做 wrap hook"，
+**不改写 `sys_call_table` 本身**；未找到 compat 表时 compat 版本返回 `-ENOENT`。
+
+**刻意不提供**（模块引用会以 unknown symbol 失败，属预期）：
+`hook_prepare`/`hook_install`/`hook_uninstall`（kpatch 的显式 `hook_t` 接口）、
+`kp_btf_raw`（内核不向模块暴露 BTF 数据指针）、`kp_kconfig_*`，
+以及 APatch 专属的 `su_*`/`kstorage_*`/`ap_mod_*`。
 ## 用法
 
 ```bash
@@ -150,46 +167,10 @@ android14-6.1、android15-6.6、android16-6.12、android17-6.18。
 所有人工审查与宿主机测试都没发现——只有真正的编译器会发现。
 ### 已知局限
 
-- 未实现 `hook_wrap`/`hook_chain_*`/`syscall*`/`kp_btf_*`（帧 ABI 与链已就绪，
-  缺分发 stub），模块引用会加载失败；
+- 未提供 `hook_prepare`/`hook_install`/`hook_uninstall` 与 `kp_btf_raw`，模块引用会加载失败（见上）；
+
 - trampoline 必须与目标同在 ±1MB 内（被顶掉的 `b.cond`/`cbz` 位移限制），
   否则 `kpm_hook_build()` 返回 `-ERANGE`；
 - `kpm_notify_event()` 已实现但尚未接入 KSU 启动事件；
 - 按名字解析内核符号的设计要求每新增符号都核对版本可用性表。
 
-## 待完成：`hook_wrap` 的分发 stub（设计已定）
-
-帧 ABI（`kpm_hook_fargs.h`）、回调链（`kpm_hook_chain.c`）和所需指令编码
-（`kpm_insn`，含前/后索引）都已就绪，缺的是把真实寄存器搬进帧、调分发器、
-再把返回值送回调用者的那段生成代码。
-
-目标 stub（4 参数版本，`kpm_hook_fargs4` 120 字节）：
-
-| # | 指令 | 编码（汇编器实测） | 作用 |
-|---|---|---|---|
-| 1 | `stp x29, x30, [sp, #-16]!` | `0xa9bf7bfd` | 建立帧链 |
-| 2 | `mov x29, sp` | `0x910003fd` | 同上 |
-| 3 | `sub sp, sp, #144` | `0xd1000000 \| (144<<10) \| (31<<5) \| 31` | 给 fargs 腾空间 |
-| 4 | `stp x0, x1, [sp, #0]` | offset 形式 | 保存 arg0/arg1 |
-| 5 | `stp x2, x3, [sp, #16]` | offset 形式 | 保存 arg2/arg3 |
-| 6 | `str xzr, [sp, #88]` | `ldst_imm` | `ret = 0` |
-| 7 | `mov x1, x<chain>` | `mov_reg` | 分发器第二个参数 |
-| 8 | `mov x0, sp` | `add_sub_imm(0,31,0)` | `&fargs` |
-| 9 | `bl <dispatcher>` | `gen_branch_imm` | 调用 C 分发器 |
-| 10 | `ldr x0, [sp, #88]` | `ldst_imm` | 取 `ret` |
-| 11 | `add sp, sp, #144` | `0x91000000 \| (144<<10) \| (31<<5) \| 31` | 回收 |
-| 12 | `ldp x29, x30, [sp], #16` | `0xa8c17bfd` | 恢复 |
-| 13 | `ret` | `0xd65f03c0` | 返回 |
-
-约束与要点：
-
-- `fargs.chain` 与 `skip_origin` 需在入口处写入（链指针 + 0），或由分发器根据
-  第一个参数推导——后者更省指令；
-- 位移类指令（`bl`）受 ±128MB 限制，stub 与分发器都在模块区，通常没问题，
-  但仍需检查 `gen_branch_imm` 返回 0 的情况；
-- **生成结果必须与汇编器逐字对齐**：先把同样的汇编写进 `.s`，用 NDK clang +
-  `ld.lld` 链接后 `llvm-objdump -d` 取基准字，再拿生成的 13 条字去比对（参见
-  `_vendor/kpm-hosttest/index_ref.s` 的做法）。
-
-这一步之后，`hook()` 走 inline hook、`hook_wrap()` 走 stub + 链，KPM 生态常用的
-两种 hook 形式就都通了。
