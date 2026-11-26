@@ -19,6 +19,7 @@
 #include <asm/ptrace.h>
 
 #include "infra/symbol_resolver.h"
+#include "kpm/kpm_hook.h"
 #include "klog.h" // IWYU pragma: keep
 
 /* Sanity bound for a caller-supplied syscall number. */
@@ -69,4 +70,57 @@ struct pt_regs *kpm_kf_task_pt_reg(struct task_struct *task)
         return NULL;
 
     return (struct pt_regs *)(stack + THREAD_SIZE - sizeof(struct pt_regs));
+}
+
+static int kpm_syscall_wrap(int nr, int is_compat, int narg, void *before, void *after, void *udata)
+{
+    unsigned long addr;
+    char err[128] = { 0 };
+    int ret;
+
+    if ((!before && !after) || narg < 0 || narg > 8)
+        return KPM_HOOK_ERR_BAD_ADDRESS;
+
+    addr = kpm_kf_syscalln_addr(nr, is_compat);
+    if (!addr) {
+        pr_warn("kpm: syscall %d (compat=%d) has no handler\n", nr, is_compat);
+        return -ENOENT;
+    }
+
+    ret = kpm_hook_wrap((u64)addr, (unsigned int)narg, (kpm_hook_before_t)before, (kpm_hook_after_t)after, udata, err,
+                        sizeof(err));
+    if (ret) {
+        pr_warn("kpm: hook syscall %d failed: %s\n", nr, err);
+        return kpm_hook_errno_to_kpatch(ret);
+    }
+    return KPM_HOOK_OK;
+}
+
+static void kpm_syscall_unwrap(int nr, int is_compat, void *before, void *after)
+{
+    unsigned long addr = kpm_kf_syscalln_addr(nr, is_compat);
+
+    if (!addr)
+        return;
+    kpm_hook_unwrap_remove((u64)addr, (kpm_hook_before_t)before, (kpm_hook_after_t)after, 1);
+}
+
+int kpm_kf_hook_syscalln(int nr, int narg, void *before, void *after, void *udata)
+{
+    return kpm_syscall_wrap(nr, 0, narg, before, after, udata);
+}
+
+void kpm_kf_unhook_syscalln(int nr, void *before, void *after)
+{
+    kpm_syscall_unwrap(nr, 0, before, after);
+}
+
+int kpm_kf_hook_compat_syscalln(int nr, int narg, void *before, void *after, void *udata)
+{
+    return kpm_syscall_wrap(nr, 1, narg, before, after, udata);
+}
+
+void kpm_kf_unhook_compat_syscalln(int nr, void *before, void *after)
+{
+    kpm_syscall_unwrap(nr, 1, before, after);
 }

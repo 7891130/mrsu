@@ -53,6 +53,10 @@ static const struct kpm_kfunc kpm_kfuncs[] = {
     { .name = "syscalln_addr", .addr = (unsigned long)&kpm_kf_syscalln_addr },
     { .name = "syscalln_name_addr", .addr = (unsigned long)&kpm_kf_syscalln_name_addr },
     { .name = "_task_pt_reg", .addr = (unsigned long)&kpm_kf_task_pt_reg },
+    { .name = "hook_syscalln", .addr = (unsigned long)&kpm_kf_hook_syscalln },
+    { .name = "unhook_syscalln", .addr = (unsigned long)&kpm_kf_unhook_syscalln },
+    { .name = "hook_compat_syscalln", .addr = (unsigned long)&kpm_kf_hook_compat_syscalln },
+    { .name = "unhook_compat_syscalln", .addr = (unsigned long)&kpm_kf_unhook_compat_syscalln },
     /* data symbol: modules read the encoded kernel version */
     { .name = "kver", .addr = (unsigned long)&kpm_kver },
 };
