@@ -202,6 +202,7 @@ bash kernel/kpm/tests/run.sh
 | [45745293073](https://github.com/7891130/mrsu/actions/runs/45745293073) | `60b2477e` | **8/8 通过** |
 | [45864659294](https://github.com/7891130/mrsu/actions/runs/45864659294) | `1e342fb7` | 8 档 `kernelsu.ko` + `kpm.ko` 全部通过；`hosttests` 红（套件首次在 Linux 上编译，见下） |
 | [45866023821](https://github.com/7891130/mrsu/actions/runs/45866023821) | `94a2087f` | **8/8 通过 + 9 套 281 项宿主机断言全绿** |
+| [45867426425](https://github.com/7891130/mrsu/actions/runs/45867426425) | `c56f055f` | 同上，且在 `kernel/kpm` 跑过 clang-format 之后（`ClangFormat check` 同提交转为绿）|
 
 覆盖：android12-5.10、android13-5.10、android13-5.15、android14-5.15、
 android14-6.1、android15-6.6、android16-6.12、android17-6.18。
