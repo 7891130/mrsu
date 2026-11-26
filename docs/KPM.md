@@ -31,7 +31,7 @@ MRSU 在 KernelSU 之上实现了一套 KernelPatch Module（`.kpm`）运行时�
 7. icache 刷新、text 置只读；
 8. 调用 `.kpm.init`；失败则调 `.kpm.exit` 并回收。
 
-## 已提供的 kfunc（34 个）
+## 已提供的 kfunc（31 个）
 
 **符号与基础（9）**
 `symbol_lookup_name`、`kallsyms_lookup_name`、`compat_copy_to_user`（**返回已拷贝长度**，失败返回 0）、
