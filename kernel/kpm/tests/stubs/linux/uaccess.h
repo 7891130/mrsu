@@ -2,6 +2,7 @@
 #define __HOST_STUB_LINUX_UACCESS_H
 
 #include <linux/err.h>
+#include <linux/errno.h>
 #include <linux/types.h>
 
 #include <string.h>

@@ -30,8 +30,8 @@ int host_fs_opens(void);
 
 struct file *filp_open(const char *path, int flags, int mode);
 struct inode *file_inode(struct file *f);
-long long i_size_read(const struct inode *inode);
-long kernel_read(struct file *f, void *buf, size_t count, long long *pos);
+loff_t i_size_read(const struct inode *inode);
+long kernel_read(struct file *f, void *buf, size_t count, loff_t *pos);
 void filp_close(struct file *f, void *id);
 
 #endif

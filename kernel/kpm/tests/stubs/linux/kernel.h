@@ -27,6 +27,17 @@
 #define __kernel
 #endif
 
+/* compiler_attributes.h provides these keyword wrappers. */
+#ifndef __nocfi
+#define __nocfi
+#endif
+#ifndef __always_inline
+#define __always_inline inline
+#endif
+#ifndef __maybe_unused
+#define __maybe_unused __attribute__((unused))
+#endif
+
 /* compiler_attributes.h provides this keyword wrapper. */
 #ifndef fallthrough
 #define fallthrough __attribute__((__fallthrough__))

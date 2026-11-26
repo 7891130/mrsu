@@ -20,8 +20,10 @@
 
 #include <linux/fs.h>
 
+#include "infra/symbol_resolver.h"
 #include "kpm/kpm.h"
 #include "kpm/kpm_provider.h"
+#include "policy/feature.h"
 
 /* --- the "kernel" the runtime resolves the channel from ------------------ */
 

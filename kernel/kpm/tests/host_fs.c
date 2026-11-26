@@ -47,12 +47,12 @@ struct inode *file_inode(struct file *f)
     return &f->inode;
 }
 
-long long i_size_read(const struct inode *inode)
+loff_t i_size_read(const struct inode *inode)
 {
     return inode->i_size;
 }
 
-long kernel_read(struct file *f, void *buf, size_t count, long long *pos)
+long kernel_read(struct file *f, void *buf, size_t count, loff_t *pos)
 {
     size_t offset = (size_t)(pos ? *pos : 0);
     size_t n = count;
@@ -64,7 +64,7 @@ long kernel_read(struct file *f, void *buf, size_t count, long long *pos)
         n = blob_len - offset;
     memcpy(buf, blob + offset, n);
     if (pos)
-        *pos = (long long)(offset + n);
+        *pos = (loff_t)(offset + n);
     return (long)n;
 }
 

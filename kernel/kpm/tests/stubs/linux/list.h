@@ -40,6 +40,11 @@ static inline void list_del(struct list_head *entry)
     entry->next = entry->prev = NULL;
 }
 
+static inline int list_empty(const struct list_head *head)
+{
+    return head->next == head;
+}
+
 #define container_of(ptr, type, member) ((type *)((char *)(ptr) - offsetof(type, member)))
 
 #define list_entry(ptr, type, member) container_of(ptr, type, member)
