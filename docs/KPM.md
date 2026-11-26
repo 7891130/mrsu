@@ -3,7 +3,8 @@
 MRSU 在 KernelSU 之上实现了一套 KernelPatch Module（`.kpm`）运行时，目标是能直接加载
 为 kpatch 编译的模块，同时保持 KernelSU 自己的功能不受影响。
 
-> 状态：内核侧已通过 **8 档 KMI 编译验证**（含 modpost），纯逻辑部分有 244 项宿主机断言；**尚未在真机上运行**。
+> 状态：内核侧 `kernelsu.ko` 与独立运行时 `kpm.ko` 已通过 **8 档 KMI 编译验证**（含 modpost），
+> 纯逻辑部分有 **9 套 / 281 项宿主机断言**（CI 每次推送都跑）；**尚未在真机上运行**。
 > 本文最后一段是上机自检清单。
 
 ## 模块格式
@@ -18,6 +19,34 @@ MRSU 在 KernelSU 之上实现了一套 KernelPatch Module（`.kpm`）运行时�
 | `.kpm.info` | `name=/version=/license=/author=/description=` 字符串 |
 | `.kpm.ctl0` / `.kpm.ctl1` | 可选控制入口 |
 | `.kpm.event` | 可选，接收运行时事件 |
+
+## 独立运行时：kpm.ko
+
+运行时不一定要长在 `kernelsu.ko` 里。同一套代码还编成 **`kpm.ko`**，由 KernelSU 模块
+开机 `insmod`，这样升级 KPM 只需换一个 .ko，不用重刷 boot image。
+
+两个模块共用 `kpm_table.c`（模块表），各自持有一份；**同一时刻只有一个对用户态可见**：
+
+| 模块 | 角色 |
+|---|---|
+| `kernelsu.ko` | `KSU_IOCTL_KPM` 入口、`kpm` feature 闸门、路由；自带一份模块表作为兜底 |
+| `kpm.ko` | 加载后通过 `ksu_kpm_register_ops` 接管控制通道，命令与开机事件直通它的表 |
+
+要点：
+
+- 用户态**不变**：`ksud kpm ...` 仍然只走 `KSU_IOCTL_KPM`，不需要改 CLI 或界面；
+- `kpm.ko` 加载时按名字解析 `ksu_kpm_register_ops` / `ksu_kpm_unregister_ops`
+  （`find_any_symbol_exact`，它比 `find_kernel_symbol_exact` 多允许模块符号——
+  LKM 模式下 `kernelsu.ko` 自己就是模块）；找不到就 **拒绝加载**，
+  不会起一个没人能访问的运行时；
+- 接管被拒绝（`-EBUSY`）的两种情况：已经有 owner，或 `kernelsu.ko` 的表里已经装了模块。
+  两张活表会静默分叉，先前加载的模块会"消失"；
+- 路由调用全程持 owner 互斥锁，所以 `kpm.ko` 的 `module_exit` 不会在命令执行到一半时把表拆掉。
+
+```bash
+insmod /data/adb/modules/<某个模块>/kpm.ko     # 之后 ksud kpm 命令就落在 kpm.ko 里
+dmesg | grep -i kpm                            # "runtime owns the control channel"
+```
 
 ## 加载流程
 
@@ -119,21 +148,30 @@ ksud kpm doctor                               # 排障：接口/feature/ioctl/�
 
 ### 已验证
 
+宿主套件就住在仓库里（`kernel/kpm/tests/`），CI 的 `hosttests` 作业每次推送都会跑：
+
+```bash
+bash kernel/kpm/tests/run.sh
+```
+
 | 范围 | 方式 | 结果 |
 |---|---|---|
-| 重定位（ABS64/PREL/CALL26/ADRP+ADD/溢出/跳过） | 宿主机单测 + 独立解码器 | 13 项 |
-| ELF 加载流程（布局/元数据/符号/入口/回滚/释放） | 宿主机集成测试，真实 `kpm_elf_load` | 21 项 |
-| AArch64 编码/解码/PC 相对重定位 | 与 NDK clang + ld.lld 输出逐条比对 | 45 项 |
-| hook 规划（短/长跳转、序言搬迁、拒绝路径） | 宿主机单测 | 39 项 |
+| 重定位（ABS64/PREL/CALL26/ADRP+ADD/溢出/跳过） | 宿主机单测 + 独立解码器 | 11 项 |
+| ELF 加载流程（布局/元数据/符号/入口/回滚/释放） | 宿主机集成测试，真实 `kpm_elf_load` | 23 项 |
+| AArch64 编码/解码/PC 相对重定位 | 与 NDK clang + ld.lld 输出逐条比对 | 46 项 |
+| hook 规划（短/长跳转、序言搬迁、拒绝路径） | 宿主机单测 | 48 项 |
 | hook 注册表 | 宿主机单测 | 21 项 |
-| wrap 帧 ABI 偏移 + 回调链 | 宿主机单测 | 30 项 |
-| 模块表（加载/卸载/list/info/ctl/事件/失败路径） | 宿主机单测 | 39 项 |
-| kfunc 返回约定 | 宿主机单测 | 21 项 |
+| wrap 帧 ABI 偏移 + 回调链 | 宿主机单测 | 27 项 |
+| 模块表（加载/卸载/list/info/ctl/事件/失败路径）**+ 控制通道归属与转发** | 宿主机单测 | 56 项 |
+| kfunc 返回约定 | 宿主机单测 | 20 项 |
+| `kpm.ko` 入口（通道解析、接管、拒绝、卸载清表） | 宿主机单测 | 29 项 |
 | 补丁是否跨页 | 宿主机单测 | 6 项 |
 | ksud CLI（全部 kpm 子命令） | 本地 `cargo check` / `cargo build --release` | 通过 |
 | 管理器界面（屏幕/路由/入口/加载动作） | 本地 `assembleRelease` 出签名 APK | 通过 |
 
-合计 **8 套 / 235 项宿主机断言** + CLI 与管理器本地构建 + 签名证书与 `KSU_EXPECTED_HASH` 一致。
+合计 **9 套 / 281 项宿主机断言**，在 CI 的 Linux 上全绿；另有 8 档 KMI 的
+`kernelsu.ko` + `kpm.ko` 编译，以及 CLI/管理器的本地构建。
+
 
 ### 审查发现并已修复的缺陷
 
@@ -149,6 +187,9 @@ ksud kpm doctor                               # 排障：接口/feature/ioctl/�
 
 - **真机运行**：trampoline 距离、文本改写、cache 刷新、真实 `.kpm` 的符号解析
   全部只有推理，没有实测。按上面的自检清单走。
+- **`kpm.ko` 的真实接管**：`ksu_kpm_register_ops` 的解析在 LKM 模式下走的是
+  "允许模块符号"的查找路径，宿主机只能测到"解析失败就拒绝加载"这一半；
+  真机要确认的是 `dmesg` 里出现 `runtime owns the control channel`。
 
 （此前"内核从未编译"的说法已作废：仓库转为公开后 Actions 分钟数免费，
 8 档编译已跑通，见下。）
@@ -159,12 +200,20 @@ ksud kpm doctor                               # 排障：接口/feature/ioctl/�
 |---|---|---|
 | [45744806351](https://github.com/7891130/mrsu/actions/runs/45744806351) | `32c63771` | 8/8 失败——`kpm_symbol.c` 第 8 行含字面量 `` `n ``，`kpm_kfunc_hook.h` 未被包含，后续 `kpm_kf_*` 全部未声明 |
 | [45745293073](https://github.com/7891130/mrsu/actions/runs/45745293073) | `60b2477e` | **8/8 通过** |
+| [45864659294](https://github.com/7891130/mrsu/actions/runs/45864659294) | `1e342fb7` | 8 档 `kernelsu.ko` + `kpm.ko` 全部通过；`hosttests` 红（套件首次在 Linux 上编译，见下） |
+| [45866023821](https://github.com/7891130/mrsu/actions/runs/45866023821) | `94a2087f` | **8/8 通过 + 9 套 281 项宿主机断言全绿** |
 
 覆盖：android12-5.10、android13-5.10、android13-5.15、android14-5.15、
 android14-6.1、android15-6.6、android16-6.12、android17-6.18。
 
-那个错误值得记一笔：它是 PowerShell 替换把反引号转义序列原样写进了源码，
-所有人工审查与宿主机测试都没发现——只有真正的编译器会发现。
+两个错误值得记一笔：
+
+1. `kpm_symbol.c` 里的反引号转义序列是 PowerShell 替换留下的，所有人工审查与
+   宿主机测试都没发现——只有真正的编译器会发现。
+2. 宿主机套件搬进仓库后第一次在 Linux 上编译，**9 套全挂**：`stubs/linux/errno.h`
+   原本 `#include <errno.h>`，而 glibc 的 `<errno.h>` 反过来向 `<linux/errno.h>` 要
+   错误码，`-I stubs` 让这个 include 指回自己，于是所有 `E*` 一个都没定义。
+   MinGW 的 `<errno.h>` 是自带的，所以这条路径以前从未被走到。
 ### 已知局限
 
 - 未提供 `hook_prepare`/`hook_install`/`hook_uninstall` 与 `kp_btf_raw`，模块引用会加载失败（见上）；
