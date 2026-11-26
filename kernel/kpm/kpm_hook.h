@@ -3,6 +3,8 @@
 
 #include <linux/types.h>
 
+#include "kpm/kpm_hook_fargs.h"
+
 /*
  * Inline hook building blocks.
  *
