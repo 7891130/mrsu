@@ -124,8 +124,7 @@ static int kpm_reloc_data(enum kpm_reloc_op op, void *place, u64 val, int len)
     return 0;
 }
 
-static int kpm_reloc_insn_movw(enum kpm_reloc_op op, void *place, u64 val, int lsb,
-                               enum kpm_insn_imm_type imm_type)
+static int kpm_reloc_insn_movw(enum kpm_reloc_op op, void *place, u64 val, int lsb, enum kpm_insn_imm_type imm_type)
 {
     u64 imm, limit = 0;
     s64 sval;
@@ -328,8 +327,8 @@ static int kpm_apply_relocate_add(Elf64_Shdr *sechdrs, unsigned int symindex, un
         }
 
         if (overflow_check && ovf == -ERANGE) {
-            pr_err("kpm: overflow in relocation type %d val %llx\n",
-                   (int)ELF64_R_TYPE(rel[i].r_info), (unsigned long long)val);
+            pr_err("kpm: overflow in relocation type %d val %llx\n", (int)ELF64_R_TYPE(rel[i].r_info),
+                   (unsigned long long)val);
             return -ENOEXEC;
         }
     }

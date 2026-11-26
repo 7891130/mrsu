@@ -78,7 +78,7 @@ const struct kpm_hook_chain_item *kpm_hook_chain_first(const struct kpm_hook_cha
 }
 
 const struct kpm_hook_chain_item *kpm_hook_chain_next(const struct kpm_hook_chain *chain,
-                                                     const struct kpm_hook_chain_item *item)
+                                                      const struct kpm_hook_chain_item *item)
 {
     unsigned int i;
 

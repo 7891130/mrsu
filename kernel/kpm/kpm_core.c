@@ -39,18 +39,16 @@ int ksu_kpm_register_ops(const struct kpm_ops *ops)
 {
     int ret = 0;
 
-    if (!ops || ops->magic != KPM_OPS_MAGIC || ops->version != KPM_OPS_VERSION || !ops->name ||
-        !ops->load || !ops->unload || !ops->list || !ops->info)
+    if (!ops || ops->magic != KPM_OPS_MAGIC || ops->version != KPM_OPS_VERSION || !ops->name || !ops->load ||
+        !ops->unload || !ops->list || !ops->info)
         return -EINVAL;
 
     mutex_lock(&kpm_owner_mutex);
     if (kpm_owner) {
-        pr_warn("kpm: %s cannot take the control channel, %s holds it\n", ops->name,
-                kpm_owner->name);
+        pr_warn("kpm: %s cannot take the control channel, %s holds it\n", ops->name, kpm_owner->name);
         ret = -EBUSY;
     } else if (!kpm_table_is_empty()) {
-        pr_warn("kpm: %s cannot take the control channel, the built-in table is in use\n",
-                ops->name);
+        pr_warn("kpm: %s cannot take the control channel, the built-in table is in use\n", ops->name);
         ret = -EBUSY;
     } else {
         kpm_owner = ops;

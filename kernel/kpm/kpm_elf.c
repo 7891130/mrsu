@@ -27,8 +27,8 @@
 #define kpm_flush_icache(start, end) __flush_icache_range((start), (end))
 #endif
 #else
-#define kpm_flush_icache(start, end) \
-    do {                             \
+#define kpm_flush_icache(start, end)                                                                                   \
+    do {                                                                                                               \
     } while (0)
 #endif
 
@@ -345,15 +345,15 @@ static void kpm_parse_info(struct kpm_load_info *li, struct kpm_module *mod)
         if (!n)
             break;
 
-#define KPM_INFO_KEY(field)                                                        \
-    if (!strncmp(s, #field "=", sizeof(#field)) && n > sizeof(#field)) {           \
-        klen = n - sizeof(#field);                                                 \
-        if (klen >= sizeof(mod->field))                                            \
-            klen = sizeof(mod->field) - 1;                                         \
-        memcpy(mod->field, s + sizeof(#field), klen);                              \
-        mod->field[klen] = 0;                                                      \
-        off += n + 1;                                                              \
-        continue;                                                                  \
+#define KPM_INFO_KEY(field)                                                                                            \
+    if (!strncmp(s, #field "=", sizeof(#field)) && n > sizeof(#field)) {                                               \
+        klen = n - sizeof(#field);                                                                                     \
+        if (klen >= sizeof(mod->field))                                                                                \
+            klen = sizeof(mod->field) - 1;                                                                             \
+        memcpy(mod->field, s + sizeof(#field), klen);                                                                  \
+        mod->field[klen] = 0;                                                                                          \
+        off += n + 1;                                                                                                  \
+        continue;                                                                                                      \
     }
 
         KPM_INFO_KEY(name)

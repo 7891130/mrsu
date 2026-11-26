@@ -27,10 +27,26 @@ static void check(int cond, const char *what)
     }
 }
 
-static void before_a(void *fargs, void *udata) { (void)fargs; (void)udata; }
-static void before_b(void *fargs, void *udata) { (void)fargs; (void)udata; }
-static void after_a(void *fargs, void *udata) { (void)fargs; (void)udata; }
-static void after_b(void *fargs, void *udata) { (void)fargs; (void)udata; }
+static void before_a(void *fargs, void *udata)
+{
+    (void)fargs;
+    (void)udata;
+}
+static void before_b(void *fargs, void *udata)
+{
+    (void)fargs;
+    (void)udata;
+}
+static void after_a(void *fargs, void *udata)
+{
+    (void)fargs;
+    (void)udata;
+}
+static void after_b(void *fargs, void *udata)
+{
+    (void)fargs;
+    (void)udata;
+}
 
 static void test_fargs_layout(void)
 {

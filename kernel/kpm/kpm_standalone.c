@@ -56,8 +56,7 @@ static int kpm_resolve_control_channel(void)
 
     if (!reg || !unreg) {
         /* Be specific: "no channel" is a different problem from "bad ELF". */
-        pr_err("kpm: no KernelSU control channel (register=%px unregister=%px)\n", (void *)reg,
-               (void *)unreg);
+        pr_err("kpm: no KernelSU control channel (register=%px unregister=%px)\n", (void *)reg, (void *)unreg);
         return -ENOENT;
     }
 

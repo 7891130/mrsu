@@ -50,13 +50,12 @@ static inline int list_empty(const struct list_head *head)
 #define list_entry(ptr, type, member) container_of(ptr, type, member)
 #define list_first_entry(ptr, type, member) list_entry((ptr)->next, type, member)
 
-#define list_for_each_entry(pos, head, member)                                                             \
-    for (pos = list_entry((head)->next, typeof(*pos), member); &pos->member != (head);                     \
+#define list_for_each_entry(pos, head, member)                                                                         \
+    for (pos = list_entry((head)->next, typeof(*pos), member); &pos->member != (head);                                 \
          pos = list_entry(pos->member.next, typeof(*pos), member))
 
-#define list_for_each_entry_safe(pos, n, head, member)                                                     \
+#define list_for_each_entry_safe(pos, n, head, member)                                                                 \
     for (pos = list_entry((head)->next, typeof(*pos), member), n = list_entry(pos->member.next, typeof(*pos), member); \
-         &pos->member != (head);                                                                           \
-         pos = n, n = list_entry(n->member.next, typeof(*n), member))
+         &pos->member != (head); pos = n, n = list_entry(n->member.next, typeof(*n), member))
 
 #endif

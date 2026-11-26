@@ -4,8 +4,17 @@
 #include <linux/types.h>
 #include <stdlib.h>
 
-static inline void *vmalloc(size_t size) { return malloc(size); }
-static inline void *vzalloc(size_t size) { return calloc(1, size); }
-static inline void vfree(const void *p) { free((void *)p); }
+static inline void *vmalloc(size_t size)
+{
+    return malloc(size);
+}
+static inline void *vzalloc(size_t size)
+{
+    return calloc(1, size);
+}
+static inline void vfree(const void *p)
+{
+    free((void *)p);
+}
 
 #endif

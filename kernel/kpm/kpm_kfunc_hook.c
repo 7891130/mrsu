@@ -15,7 +15,7 @@
 #include <linux/types.h>
 
 #include "hook/patch_memory.h" /* ksu_patch_text */
-#include "klog.h"              // IWYU pragma: keep
+#include "klog.h" // IWYU pragma: keep
 #include "kpm/kpm_hook.h"
 #include "kpm/kpm_hook_chain.h"
 #include "kpm/kpm_hook_table.h"

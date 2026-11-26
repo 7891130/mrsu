@@ -68,8 +68,8 @@ static long stub_event(const char *event, const char *args, void *reserved)
     return 0;
 }
 
-int kpm_elf_load(struct kpm_module *mod, const void *data, size_t len, const char *args,
-                 kpm_name_exists_t name_exists, char *err, size_t err_len)
+int kpm_elf_load(struct kpm_module *mod, const void *data, size_t len, const char *args, kpm_name_exists_t name_exists,
+                 char *err, size_t err_len)
 {
     (void)data;
     (void)len;
@@ -265,7 +265,9 @@ int main(void)
 
     setvbuf(stdout, NULL, _IONBF, 0);
 
-    host_fs_set_blob("PK\x03\x04" "fake kpm", 12);
+    host_fs_set_blob("PK\x03\x04"
+                     "fake kpm",
+                     12);
     kpm_runtime_init();
 
     printf("loading\n");
@@ -327,8 +329,7 @@ int main(void)
     check(ksu_kpm_register_ops(&provider_without_load) == -EINVAL, "ops without load is refused");
     check(ksu_kpm_register_ops(&provider_bad_magic) == -EINVAL, "a foreign magic is refused");
     check(ksu_kpm_register_ops(&provider_bad_version) == -EINVAL, "a future ABI version is refused");
-    check(ksu_kpm_register_ops(&provider_ops) == -EBUSY,
-          "cannot take over while the built-in table has modules");
+    check(ksu_kpm_register_ops(&provider_ops) == -EBUSY, "cannot take over while the built-in table has modules");
 
     check(kpm_unload("mod2") == 0, "unload the remaining built-in module");
     check(ksu_kpm_register_ops(&provider_ops) == 0, "kpm.ko can take the channel over");
@@ -337,15 +338,14 @@ int main(void)
     check(kpm_load_path(MODULE_PATH, NULL, err, sizeof(err)) == -4242, "load is routed to the owner");
     check(strcmp(err, "served by kpm.ko") == 0, "the owner's diagnostics come through");
     check(kpm_unload("x") == -4243, "unload is routed to the owner");
-    check(kpm_list(text, sizeof(text)) == 14 && strstr(text, "from-provider") != NULL,
-          "list is routed to the owner");
+    check(kpm_list(text, sizeof(text)) == 14 && strstr(text, "from-provider") != NULL, "list is routed to the owner");
     check(kpm_info("x", text, sizeof(text)) == 19, "info is routed to the owner");
     memset(text, 0, sizeof(text));
     check(kpm_ctl0("x", "y", (char __user *)text, (int)sizeof(text)) == -4244, "ctl0 is routed");
     check(kpm_ctl1("x", NULL, NULL, NULL) == -4245, "ctl1 is routed");
     check(kpm_notify_event("boot-completed", NULL) == -4246, "events are routed to the owner");
-    check(prov_load == 1 && prov_unload == 1 && prov_list == 1 && prov_info == 1 && prov_ctl0 == 1 &&
-              prov_ctl1 == 1 && prov_event == 1,
+    check(prov_load == 1 && prov_unload == 1 && prov_list == 1 && prov_info == 1 && prov_ctl0 == 1 && prov_ctl1 == 1 &&
+              prov_event == 1,
           "each op was called exactly once");
 
     printf("the feature gate covers the owner\n");

@@ -25,7 +25,7 @@ static struct kpm_module *kpm_find_locked(const char *name)
 {
     struct kpm_module *pos;
 
-    list_for_each_entry(pos, &kpm_modules, list) {
+    list_for_each_entry (pos, &kpm_modules, list) {
         if (!strcmp(pos->name, name))
             return pos;
     }
@@ -186,9 +186,8 @@ int kpm_table_list(char *out, size_t size)
     out[0] = '\0';
 
     mutex_lock(&kpm_mutex);
-    list_for_each_entry(pos, &kpm_modules, list) {
-        int n = snprintf(out + off, size - off, "%s\t%s\t%s\n", pos->name, pos->version,
-                         pos->args ? pos->args : "");
+    list_for_each_entry (pos, &kpm_modules, list) {
+        int n = snprintf(out + off, size - off, "%s\t%s\t%s\n", pos->name, pos->version, pos->args ? pos->args : "");
         if (n < 0 || (size_t)n >= size - off)
             break;
         off += n;
@@ -223,8 +222,8 @@ int kpm_table_info(const char *name, char *out, size_t size)
                  "has_ctl0=%d\n"
                  "has_ctl1=%d\n"
                  "has_event=%d\n",
-                 mod->name, mod->version, mod->license, mod->author, mod->description,
-                 mod->args ? mod->args : "", mod->ctl0 ? 1 : 0, mod->ctl1 ? 1 : 0, mod->event ? 1 : 0);
+                 mod->name, mod->version, mod->license, mod->author, mod->description, mod->args ? mod->args : "",
+                 mod->ctl0 ? 1 : 0, mod->ctl1 ? 1 : 0, mod->event ? 1 : 0);
     mutex_unlock(&kpm_mutex);
 
     return n < 0 ? n : (int)min((size_t)n, size - 1);
@@ -283,7 +282,7 @@ void kpm_table_release_all(void)
     struct kpm_module *pos, *n;
 
     mutex_lock(&kpm_mutex);
-    list_for_each_entry_safe(pos, n, &kpm_modules, list) {
+    list_for_each_entry_safe (pos, n, &kpm_modules, list) {
         list_del(&pos->list);
         kpm_release_locked(pos);
     }
@@ -300,7 +299,7 @@ int kpm_table_notify_event(const char *event, const char *args)
         return -EINVAL;
 
     mutex_lock(&kpm_mutex);
-    list_for_each_entry(pos, &kpm_modules, list) {
+    list_for_each_entry (pos, &kpm_modules, list) {
         int rc;
 
         if (!pos->event)

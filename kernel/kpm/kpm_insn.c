@@ -280,8 +280,8 @@ int kpm_insn_retarget(u32 insn, u64 old_pc, u64 new_pc, u32 *out)
 
         rewritten = kpm_insn_gen_comp_branch_imm(new_pc, target, (u8)(insn & 0x1f), is64, non_zero);
     } else if (kpm_insn_is_adr(insn) || kpm_insn_is_adrp(insn)) {
-        u64 target = kpm_insn_is_adrp(insn) ? (old_pc & ~0xfffull) + (u64)kpm_insn_decode_adr_imm(insn)
-                                            : (u64)((s64)old_pc + kpm_insn_decode_adr_imm(insn));
+        u64 target = kpm_insn_is_adrp(insn) ? (old_pc & ~0xfffull) + (u64)kpm_insn_decode_adr_imm(insn) :
+                                              (u64)((s64)old_pc + kpm_insn_decode_adr_imm(insn));
 
         rewritten = kpm_insn_gen_adr(new_pc, target, (u8)(insn & 0x1f), kpm_insn_is_adrp(insn));
     } else {

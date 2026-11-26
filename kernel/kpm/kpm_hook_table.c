@@ -29,7 +29,7 @@ static struct kpm_hook_entry *find_locked(u64 target)
 {
     struct kpm_hook_entry *pos;
 
-    list_for_each_entry(pos, &kpm_hooks, list) {
+    list_for_each_entry (pos, &kpm_hooks, list) {
         if (pos->target == target)
             return pos;
     }
@@ -84,7 +84,7 @@ unsigned int kpm_hook_table_count(void)
     unsigned int n = 0;
 
     mutex_lock(&kpm_hooks_lock);
-    list_for_each_entry(pos, &kpm_hooks, list)
+    list_for_each_entry (pos, &kpm_hooks, list)
         n++;
     mutex_unlock(&kpm_hooks_lock);
 
@@ -101,7 +101,7 @@ int kpm_hook_table_list(char *out, size_t size)
     out[0] = '\0';
 
     mutex_lock(&kpm_hooks_lock);
-    list_for_each_entry(pos, &kpm_hooks, list) {
+    list_for_each_entry (pos, &kpm_hooks, list) {
         int n = snprintf(out + off, size - off, "0x%llx -> 0x%llx %s\n", (unsigned long long)pos->target,
                          (unsigned long long)pos->replacement, pos->owner ? pos->owner : "");
 

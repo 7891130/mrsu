@@ -16,8 +16,8 @@
 #include <linux/types.h>
 
 #include "hook/patch_memory.h" /* ksu_patch_text */
-#include "klog.h"              // IWYU pragma: keep
-#include "kpm/kpm.h"           /* kpm_alloc_exec / kpm_protect_exec */
+#include "klog.h" // IWYU pragma: keep
+#include "kpm/kpm.h" /* kpm_alloc_exec / kpm_protect_exec */
 #include "kpm/kpm_hook.h"
 #include "kpm/kpm_hook_table.h"
 
@@ -44,7 +44,7 @@ static int patch_target(u64 target, const struct kpm_hook_plan *plan)
 }
 
 static int kpm_hook_install_impl(u64 target, kpm_replacement_fn build, void *arg, const char *owner, char *err,
-                               size_t err_len)
+                                 size_t err_len)
 {
     u64 replacement;
     struct kpm_hook_entry *entry;
@@ -178,8 +178,7 @@ int kpm_hook_install(u64 target, u64 replacement, const char *owner, char *err, 
     return kpm_hook_install_impl(target, kpm_fixed_replacement, (void *)(uintptr_t)replacement, owner, err, err_len);
 }
 
-int kpm_hook_install_with(u64 target, kpm_replacement_fn build, void *arg, const char *owner, char *err,
-                          size_t err_len)
+int kpm_hook_install_with(u64 target, kpm_replacement_fn build, void *arg, const char *owner, char *err, size_t err_len)
 {
     return kpm_hook_install_impl(target, build, arg, owner, err, err_len);
 }

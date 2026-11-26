@@ -158,8 +158,7 @@ int main(void)
 
         /* a branch whose target is out of reach from the trampoline */
         insn = kpm_insn_gen_branch_imm(pc, pc + (1ll << 26), false);
-        check(kpm_insn_retarget(insn, pc, 0x8000000000ull, &out) == -ERANGE,
-              "unreachable target reports -ERANGE");
+        check(kpm_insn_retarget(insn, pc, 0x8000000000ull, &out) == -ERANGE, "unreachable target reports -ERANGE");
 
         /* non-pc-relative instruction is refused */
         check(kpm_insn_retarget(0xd503201fu, pc, tramp, &out) == -EINVAL, "nop refused");

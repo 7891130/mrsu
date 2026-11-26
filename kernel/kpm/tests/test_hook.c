@@ -100,7 +100,7 @@ static void test_far_plan(void)
 {
     struct kpm_hook_plan plan;
     const u32 target_pc = 0x100000;
-    const u64 tramp_pc = 0x140000;     /* near: a cbz only reaches +-1MB */
+    const u64 tramp_pc = 0x140000; /* near: a cbz only reaches +-1MB */
     const u64 replacement = 0x20000000; /* beyond +-128MB, within +-4GB */
     u32 prologue[KPM_HOOK_MAX_PATCH_INSNS];
     int rc;
@@ -135,10 +135,8 @@ static void test_refusals(void)
     check(kpm_hook_build(0x100000, prologue, 3, 0x40000000, 0x20000000, &plan) == -EINVAL,
           "unrelocatable prologue refused");
 
-    check(kpm_hook_build(0x100000, prologue, 2, 0x40000000, 0x20000000, &plan) == -EINVAL,
-          "short prologue refused");
-    check(kpm_hook_build(0x100002, prologue, 3, 0x40000000, 0x20000000, &plan) == -EINVAL,
-          "unaligned target refused");
+    check(kpm_hook_build(0x100000, prologue, 2, 0x40000000, 0x20000000, &plan) == -EINVAL, "short prologue refused");
+    check(kpm_hook_build(0x100002, prologue, 3, 0x40000000, 0x20000000, &plan) == -EINVAL, "unaligned target refused");
     check(kpm_hook_build(0x100000, prologue, 3, 0x40000000, 1ull << 34, &plan) == -ERANGE,
           "unreachable replacement refused");
 }

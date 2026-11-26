@@ -176,8 +176,8 @@ static void test_adrp_add_pair(void)
 
     check(kpm_apply_relocations(secs, SHNUM, SEC_SYMTAB) == 0, "returns 0");
 
-    printf("    adrp insn=%08x imm=%lld  add insn=%08x lo12=%03x\n",
-           text[0], decode_adrp_imm(text[0]), text[1], decode_add_lo12(text[1]));
+    printf("    adrp insn=%08x imm=%lld  add insn=%08x lo12=%03x\n", text[0], decode_adrp_imm(text[0]), text[1],
+           decode_add_lo12(text[1]));
     resolved = (u64)(((uintptr_t)text & ~0xfffull) + ((u64)decode_adrp_imm(text[0]) << 12));
     resolved += decode_add_lo12(text[1]);
     check(resolved == target, "adrp+add resolves to the target");
@@ -189,8 +189,7 @@ static void test_unsupported(void)
     build_sections(1);
     set_rela(0, 0, 0xdead, 0, 0);
 
-    check(kpm_apply_relocations(secs, SHNUM, SEC_SYMTAB) == -ENOEXEC,
-          "rejected with -ENOEXEC");
+    check(kpm_apply_relocations(secs, SHNUM, SEC_SYMTAB) == -ENOEXEC, "rejected with -ENOEXEC");
 }
 
 static void test_abs32_overflow(void)
@@ -201,8 +200,7 @@ static void test_abs32_overflow(void)
     /* 0x1_0000_0000 does not fit into 32 bits */
     set_drela(0, 0, R_AARCH64_ABS32, 0x100000000ull, 0);
 
-    check(kpm_apply_relocations(secs, SHNUM, SEC_SYMTAB) == -ENOEXEC,
-          "overflow rejected");
+    check(kpm_apply_relocations(secs, SHNUM, SEC_SYMTAB) == -ENOEXEC, "overflow rejected");
 }
 
 static void test_skips_non_alloc_target(void)
@@ -212,8 +210,7 @@ static void test_skips_non_alloc_target(void)
     secs[SEC_RELA_TEXT].sh_info = SEC_SYMTAB; /* not SHF_ALLOC */
     set_rela(0, 0, 0xdead, 0, 0);
 
-    check(kpm_apply_relocations(secs, SHNUM, SEC_SYMTAB) == 0,
-          "skipped instead of failing");
+    check(kpm_apply_relocations(secs, SHNUM, SEC_SYMTAB) == 0, "skipped instead of failing");
 }
 
 int main(void)

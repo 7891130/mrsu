@@ -72,20 +72,21 @@ static void __nocfi kpm_wrap_dispatch(struct kpm_hook_fargs *fargs, struct kpm_w
             break;
         case 4:
             fargs->ret = ((u64 (*)(u64, u64, u64, u64))ctx->orig)(fargs->args[0], fargs->args[1], fargs->args[2],
-                                                                 fargs->args[3]);
+                                                                  fargs->args[3]);
             break;
         case 5:
-            fargs->ret = ((u64 (*)(u64, u64, u64, u64, u64))ctx->orig)(
-                fargs->args[0], fargs->args[1], fargs->args[2], fargs->args[3], fargs->args[4]);
+            fargs->ret = ((u64 (*)(u64, u64, u64, u64, u64))ctx->orig)(fargs->args[0], fargs->args[1], fargs->args[2],
+                                                                       fargs->args[3], fargs->args[4]);
             break;
         case 6:
             fargs->ret = ((u64 (*)(u64, u64, u64, u64, u64, u64))ctx->orig)(
                 fargs->args[0], fargs->args[1], fargs->args[2], fargs->args[3], fargs->args[4], fargs->args[5]);
             break;
         default:
-            fargs->ret = ((u64 (*)(u64, u64, u64, u64, u64, u64, u64, u64))ctx->orig)(
-                fargs->args[0], fargs->args[1], fargs->args[2], fargs->args[3], fargs->args[4], fargs->args[5],
-                fargs->args[6], fargs->args[7]);
+            fargs->ret = ((u64 (*)(u64, u64, u64, u64, u64, u64, u64, u64))ctx->orig)(fargs->args[0], fargs->args[1],
+                                                                                      fargs->args[2], fargs->args[3],
+                                                                                      fargs->args[4], fargs->args[5],
+                                                                                      fargs->args[6], fargs->args[7]);
             break;
         }
     }

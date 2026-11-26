@@ -63,8 +63,8 @@ static long stub_exit(void *reserved)
     return 0;
 }
 
-int kpm_elf_load(struct kpm_module *mod, const void *data, size_t len, const char *args,
-                 kpm_name_exists_t name_exists, char *err, size_t err_len)
+int kpm_elf_load(struct kpm_module *mod, const void *data, size_t len, const char *args, kpm_name_exists_t name_exists,
+                 char *err, size_t err_len)
 {
     (void)data;
     (void)len;
@@ -151,22 +151,22 @@ int main(void)
 
     setvbuf(stdout, NULL, _IONBF, 0);
 
-    host_fs_set_blob("PK\x03\x04" "fake kpm", 12);
+    host_fs_set_blob("PK\x03\x04"
+                     "fake kpm",
+                     12);
     kpm_runtime_init();
 
     printf("no control channel in the kernel\n");
     channel_present = 0;
     check(kpm_standalone_init() == -ENOENT, "refuses to load without a control channel");
-    check(kpm_load_path(MODULE_PATH, NULL, err, sizeof(err)) == 0,
-          "the built-in path still works on its own");
+    check(kpm_load_path(MODULE_PATH, NULL, err, sizeof(err)) == 0, "the built-in path still works on its own");
     check(kpm_unload("mod1") == 0, "and can unload again");
 
     printf("the built-in table already owns modules\n");
     channel_present = 1;
     check(kpm_load_path(MODULE_PATH, NULL, err, sizeof(err)) == 0, "load into the built-in table");
     check(kpm_standalone_init() == -EBUSY, "kpm.ko refuses to shadow loaded modules");
-    check(kpm_list(text, sizeof(text)) > 0 && strstr(text, "mod1") != NULL,
-          "the built-in module is still visible");
+    check(kpm_list(text, sizeof(text)) > 0 && strstr(text, "mod1") != NULL, "the built-in module is still visible");
     check(kpm_unload("mod1") == 0, "unload it again");
 
     printf("taking the channel over\n");
@@ -189,8 +189,7 @@ int main(void)
     kpm_standalone_exit();
     check(exit_calls == 1, "unloading kpm.ko unloads its modules");
     check(kpm_list(text, sizeof(text)) == 0, "the table is empty afterwards");
-    check(kpm_load_path(MODULE_PATH, NULL, err, sizeof(err)) == 0,
-          "commands fall back to the built-in table");
+    check(kpm_load_path(MODULE_PATH, NULL, err, sizeof(err)) == 0, "commands fall back to the built-in table");
     check(kpm_unload("mod1") == 0, "cleanup");
 
     printf("feature gate\n");
