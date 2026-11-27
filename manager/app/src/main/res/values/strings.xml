@@ -409,6 +409,7 @@
     <string name="kpm_insmod_ko">加载 .ko 内核模块</string>
     <string name="kpm_note">临时加载的模块重启后失效；开机加载的模块每次开机自动载入。</string>
     <!-- Jailbreak mode: ask about the bootloader before entering install, and again before flashing. -->
+    <string name="install_jailbreak_uapi_mismatch">The kernel side and this manager disagree on UAPI (%1$d / %2$d). Reboot and jailbreak again so the new kernel module takes effect, then install.</string>
     <string name="require_kernel_version_late_load">The kernel side is older than the manager (uapi %1$d &lt; %2$d). In Jailbreak mode it cannot be updated by flashing: reboot and jailbreak again so the new kernel module shipped with this manager gets loaded. Tap to reboot.</string>
     <string name="bootloader_warning_title">Warning</string>
     <string name="bootloader_warning_message">Please confirm the device bootloader is unlocked before flashing.</string>

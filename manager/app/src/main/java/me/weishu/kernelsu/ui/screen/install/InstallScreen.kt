@@ -84,6 +84,15 @@ fun InstallScreen() {
     val isGkiDevice by produceState(initialValue = false) { value = getKernelVersion().isGKI() }
     // 越狱模式（late-load）运行在已锁定 BL 上，任何写入分区的操作都有变砖风险
     val jailbreakMode by produceState(initialValue = false) { value = Natives.isLateLoadMode }
+    // 内核端与 ksud 的 UAPI 对不上时，ksud 的每个阶段都会以
+    // "UAPI version mismatch ... Please update KernelSU!" 失败——直接安装最后跑的正是这些阶段。
+    // 越狱模式没法靠刷写换 ko，只能重启后重新越狱，所以这里先把它拦下来，别让它刷到一半再报错。
+    val uapiMismatchInJailbreak = jailbreakMode && Natives.kernelUAPIVersion != Natives.managerUAPIVersion
+    val uapiMismatchTip = stringResource(
+        R.string.install_jailbreak_uapi_mismatch,
+        Natives.kernelUAPIVersion,
+        Natives.managerUAPIVersion,
+    )
     val partitionWriteBlockedTip = stringResource(id = R.string.jailbreak_mode_partition_blocked)
 
     val selectFileTip = stringResource(id = R.string.select_file_tip, defaultPartition)
@@ -169,6 +178,8 @@ fun InstallScreen() {
             when {
                 // 越狱模式下最后一次兜底拦截：写分区的安装方式（直接安装除外）不放行
                 method.blockedInJailbreak(jailbreakMode) -> showMessage(partitionWriteBlockedTip)
+                // 内核端 UAPI 没对上：刷了也是白刷，ksud 后续阶段照样报「请更新」
+                uapiMismatchInJailbreak -> showMessage(uapiMismatchTip)
                 // 直接安装会真的刷写 boot 分区，刷之前再问一次 BL 是否已解锁
                 jailbreakMode && method is InstallMethod.DirectInstall && !bootloaderWarningAcknowledged ->
                     showBootloaderWarning = true
