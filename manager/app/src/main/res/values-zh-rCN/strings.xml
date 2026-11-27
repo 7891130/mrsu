@@ -439,4 +439,13 @@
     <string name="kpm_version_author">%1$s，作者 %2$s</string>
     <string name="kpm_remove_confirm">删除 %1$s？会先卸载，再删除它的文件。</string>
     <string name="kpm_store_hint">安装目录：%1$s</string>
+    <string name="kpm_add">添加</string>
+    <string name="kpm_method_title">选择加载方式</string>
+    <string name="kpm_method_load">加载</string>
+    <string name="kpm_method_load_summary">只加载到当前运行的内核，重启后失效。</string>
+    <string name="kpm_method_embed">嵌入</string>
+    <string name="kpm_method_embed_summary">装进 /data/adb/kpm/&lt;id&gt; 并立即加载；重启后由内核自动再次加载。</string>
+    <string name="kpm_status_loaded_only">已加载</string>
+    <string name="kpm_status_embedded_loaded">已嵌入 · 已加载</string>
+    <string name="kpm_status_embedded">已嵌入</string>
 </resources>

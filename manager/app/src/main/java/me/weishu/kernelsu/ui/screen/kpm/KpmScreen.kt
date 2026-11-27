@@ -5,26 +5,29 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -51,7 +54,6 @@ import kotlinx.coroutines.withContext
 import me.weishu.kernelsu.Natives
 import me.weishu.kernelsu.R
 import me.weishu.kernelsu.ui.util.getFileName
-import me.weishu.kernelsu.ui.util.insmodReport
 import me.weishu.kernelsu.ui.util.kpmCtl0Report
 import me.weishu.kernelsu.ui.util.kpmDoctorReport
 import me.weishu.kernelsu.ui.util.kpmInfoReport
@@ -59,7 +61,7 @@ import me.weishu.kernelsu.ui.util.kpmInstallReport
 import me.weishu.kernelsu.ui.util.kpmInsmodRuntimeReport
 import me.weishu.kernelsu.ui.util.kpmInstalled
 import me.weishu.kernelsu.ui.util.kpmList
-import me.weishu.kernelsu.ui.util.kpmSetEnabledReport
+import me.weishu.kernelsu.ui.util.kpmLoadReport
 import me.weishu.kernelsu.ui.util.kpmUninstallReport
 import me.weishu.kernelsu.ui.util.kpmUnloadReport
 import me.weishu.kernelsu.ui.util.rootAvailable
@@ -69,8 +71,8 @@ import java.io.File
 private const val KPM_MIN_UAPI_VERSION = 7
 
 /**
- * 安装目录里的一个模块（APatch 的布局：`/data/adb/kpm/<id>/<id>.kpm`，加一个
- * `disable` 标记文件表示"装着但开机不加载"），外加"临时加载、没有装进目录"的情况。
+ * 列表里的一项。`embedded` 表示它躺在内核侧目录（`/data/adb/kpm/<id>/`）里，
+ * 开机由 autoload 重新加载；`loaded` 表示此刻在内核内存里。
  */
 private data class KpmEntry(
     val id: String,
@@ -78,9 +80,8 @@ private data class KpmEntry(
     val version: String,
     val author: String,
     val description: String,
-    val disabled: Boolean,
+    val embedded: Boolean,
     val loaded: Boolean,
-    val installed: Boolean,
 )
 
 /** `ksud kpm installed` 一行：id、name、version、author、disabled、loaded、description。 */
@@ -95,14 +96,13 @@ private fun parseInstalled(text: String): List<KpmEntry> = text.lineSequence()
             version = f[2].trim(),
             author = f[3].trim(),
             description = f[6].trim(),
-            disabled = f[4].trim() == "1",
+            embedded = true,
             loaded = f[5].trim() == "1",
-            installed = true,
         )
     }
     .toList()
 
-/** `ksud kpm list` 一行：name、version、args —— 用来补上"临时加载但没安装"的模块。 */
+/** `ksud kpm list`：补上"加载了但没嵌入"的那些。 */
 private fun mergeLoaded(entries: List<KpmEntry>, loadedText: String): List<KpmEntry> {
     val extra = loadedText.lineSequence()
         .filter { it.isNotBlank() }
@@ -116,9 +116,8 @@ private fun mergeLoaded(entries: List<KpmEntry>, loadedText: String): List<KpmEn
                 version = f.getOrNull(1)?.trim().orEmpty(),
                 author = "",
                 description = f.getOrNull(2)?.trim().orEmpty(),
-                disabled = false,
+                embedded = false,
                 loaded = true,
-                installed = false,
             )
         }
         .toList()
@@ -126,13 +125,10 @@ private fun mergeLoaded(entries: List<KpmEntry>, loadedText: String): List<KpmEn
     return entries + extra
 }
 
-/** What to do with a picked file. */
-private enum class PickedMode { InstallAndLoad, InstallOnly, InsmodKo }
-
 /** Copy a picked document into the app cache so ksud can open a real path. */
 private fun Uri.copyIntoCache(context: Context): String {
-    val name = getFileName(context)?.takeIf { it.endsWith(".kpm") || it.endsWith(".ko") }
-        ?: "module-${System.currentTimeMillis()}.bin"
+    val name = getFileName(context)?.takeIf { it.endsWith(".kpm") }
+        ?: "module-${System.currentTimeMillis()}.kpm"
     val target = File(context.cacheDir, name)
     context.contentResolver.openInputStream(this)?.use { input ->
         target.outputStream().use { output -> input.copyTo(output) }
@@ -141,13 +137,12 @@ private fun Uri.copyIntoCache(context: Context): String {
 }
 
 /**
- * KPM（KernelPatch 模块）主界面。
+ * KPM 主界面：和模块页同一个样子——一张张卡片列出已有的 KPM，右下角一个「+」。
  *
- * 结构与加载方式对齐 APatch：模块**安装**进 `/data/adb/kpm/<id>/<id>.kpm`，
- * 每行右侧的开关控制"开机是否加载"（`<id>/disable` 标记文件），删除时先卸载再删目录；
- * 临时加载（没走安装目录）的模块也会出现在列表里，标注为"临时加载"。
- *
- * 所有操作都走 root shell 调 `ksud kpm ...`，失败原因原样显示在「最近结果」里。
+ * 加号选好文件之后才问加载方式，和 FolkPatch 一样只有两种：
+ *   - 加载：只放进当前内核内存，重启就没了（`ksud kpm load`）；
+ *   - 嵌入：装进内核侧目录 `/data/adb/kpm/<id>/`，重启后由内核自己再加载
+ *           （`ksud kpm install`）。没有单独的"开机加载"入口了。
  */
 @Composable
 fun KpmPager(
@@ -162,6 +157,7 @@ fun KpmPager(
     var resultText by remember { mutableStateOf("") }
     var reloadToken by remember { mutableIntStateOf(0) }
     var search by remember { mutableStateOf("") }
+    var pendingPath by remember { mutableStateOf<String?>(null) }
     var controlTarget by remember { mutableStateOf<KpmEntry?>(null) }
     var removeTarget by remember { mutableStateOf<KpmEntry?>(null) }
     var unloadTarget by remember { mutableStateOf<KpmEntry?>(null) }
@@ -177,14 +173,11 @@ fun KpmPager(
     }
     val enabled = unavailableReason == null
 
-    var standaloneLoaded by remember { mutableStateOf(false) }
-
     fun refresh() {
         scope.launch {
             withContext(Dispatchers.IO) {
                 installedText = runCatching { kpmInstalled() }.getOrDefault("")
                 loadedText = runCatching { kpmList() }.getOrDefault("")
-                standaloneLoaded = File("/sys/module/kpm").exists()
             }
         }
     }
@@ -202,26 +195,10 @@ fun KpmPager(
         }
     }
 
-    fun handlePicked(uri: Uri?, mode: PickedMode) {
-        if (uri == null) return
-        runAction {
-            val path = uri.copyIntoCache(context)
-            when (mode) {
-                PickedMode.InstallAndLoad -> kpmInstallReport(path, loadNow = true)
-                PickedMode.InstallOnly -> kpmInstallReport(path, loadNow = false)
-                PickedMode.InsmodKo -> insmodReport(path)
-            }
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            pendingPath = runCatching { uri.copyIntoCache(context) }.getOrNull()
         }
-    }
-
-    val installLoader = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        handlePicked(uri, PickedMode.InstallAndLoad)
-    }
-    val installOnlyLoader = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        handlePicked(uri, PickedMode.InstallOnly)
-    }
-    val koPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        handlePicked(uri, PickedMode.InsmodKo)
     }
 
     val entries = remember(installedText, loadedText) {
@@ -229,121 +206,117 @@ fun KpmPager(
     }
     val visible = remember(entries, search) {
         if (search.isBlank()) entries
-        else entries.filter {
-            it.name.contains(search, true) || it.id.contains(search, true)
-        }
+        else entries.filter { it.name.contains(search, true) || it.id.contains(search, true) }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = bottomInnerPadding + 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = bottomInnerPadding + 88.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text(
-                text = stringResource(R.string.kpm_page_title),
-                style = MaterialTheme.typography.titleLarge,
-            )
-            TextButton(onClick = { reloadToken++ }) {
-                Text(stringResource(R.string.kpm_refresh))
-            }
-        }
-
-        // Which directory the list comes from. It doubles as a build marker: an
-        // older APK has no such line, so "no change" can be told apart from
-        // "old build still installed".
-        Text(
-            text = stringResource(R.string.kpm_store_hint, "/data/adb/kpm"),
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
-        unavailableReason?.let { reason ->
-            SectionCard(title = stringResource(R.string.kpm_unavailable)) {
-                Text(text = reason, style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Button(
-                modifier = Modifier.weight(1f),
-                enabled = enabled,
-                onClick = { installLoader.launch(arrayOf("*/*")) },
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(stringResource(R.string.kpm_import_load))
+                Column {
+                    Text(
+                        text = stringResource(R.string.kpm_page_title),
+                        style = MaterialTheme.typography.titleLarge,
+                    )
+                    Text(
+                        text = stringResource(R.string.kpm_store_hint, "/data/adb/kpm"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(onClick = { reloadToken++ }) {
+                    Text(stringResource(R.string.kpm_refresh))
+                }
             }
-            OutlinedButton(
-                modifier = Modifier.weight(1f),
-                enabled = enabled,
-                onClick = { installOnlyLoader.launch(arrayOf("*/*")) },
-            ) {
-                Text(stringResource(R.string.kpm_import_only))
+
+            unavailableReason?.let { reason ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                    ),
+                ) {
+                    Text(
+                        text = reason,
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                }
             }
-        }
 
-        OutlinedTextField(
-            value = search,
-            onValueChange = { search = it },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = entries.size > 3,
-            singleLine = true,
-            label = { Text(stringResource(R.string.kpm_search)) },
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        )
+            if (entries.size > 3) {
+                OutlinedTextField(
+                    value = search,
+                    onValueChange = { search = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    label = { Text(stringResource(R.string.kpm_search)) },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                )
+            }
 
-        if (entries.isEmpty()) {
-            Text(
-                text = stringResource(R.string.kpm_empty),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(vertical = 24.dp),
-            )
-            // An empty list has two very different causes: nothing is installed,
-            // or `ksud kpm installed` could not answer at all. Show its words
-            // instead of a bare "no modules".
-            if (installedText.isNotBlank() && installedText != resultText) {
+            if (entries.isEmpty()) {
                 Text(
-                    text = installedText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = stringResource(R.string.kpm_empty),
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(vertical = 24.dp),
                 )
+                // 空列表有两种原因：真没装，或者 ksud 根本答不上来。把原话贴出来。
+                if (installedText.isNotBlank() && installedText != resultText) {
+                    Text(
+                        text = installedText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            } else {
+                visible.forEach { entry ->
+                    ModuleCard(
+                        entry = entry,
+                        enabled = enabled,
+                        onControl = { controlTarget = entry },
+                        onInfo = { runAction { kpmInfoReport(entry.name) } },
+                        onUnload = { unloadTarget = entry },
+                        onRemove = { removeTarget = entry },
+                    )
+                }
             }
-        } else {
-            visible.forEach { entry ->
-                ModuleCard(
-                    entry = entry,
-                    enabled = enabled,
-                    onToggle = { on ->
-                        runAction { kpmSetEnabledReport(entry.id, on) }
-                    },
-                    onControl = { controlTarget = entry },
-                    onInfo = { runAction { kpmInfoReport(entry.name) } },
-                    onUnload = { unloadTarget = entry },
-                    onRemove = { removeTarget = entry },
-                )
-            }
-        }
 
-        SectionCard(title = stringResource(R.string.kpm_integration)) {
-            Text(
-                text = if (standaloneLoaded) {
-                    stringResource(R.string.kpm_standalone_loaded)
-                } else {
-                    stringResource(R.string.kpm_standalone_idle)
-                },
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            if (resultText.isNotEmpty()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
+                    ),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Text(
+                            text = stringResource(R.string.kpm_last_result),
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                        Text(text = resultText, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextButton(
-                    enabled = enabled && !standaloneLoaded,
+                    enabled = enabled,
                     onClick = { runAction { kpmInsmodRuntimeReport() } },
                 ) {
                     Text(stringResource(R.string.kpm_standalone_load))
@@ -354,24 +327,32 @@ fun KpmPager(
                 ) {
                     Text(stringResource(R.string.kpm_doctor))
                 }
-                TextButton(
-                    enabled = enabled,
-                    onClick = { koPicker.launch(arrayOf("*/*")) },
-                ) {
-                    Text(stringResource(R.string.kpm_insmod_ko))
-                }
             }
         }
 
-        if (resultText.isNotEmpty()) {
-            SectionCard(title = stringResource(R.string.kpm_last_result)) {
-                Text(text = resultText, style = MaterialTheme.typography.bodySmall)
-            }
-        }
+        ExtendedFloatingActionButton(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 16.dp, bottom = bottomInnerPadding + 16.dp),
+            onClick = { picker.launch(arrayOf("*/*")) },
+            icon = { Icon(Icons.Rounded.Add, contentDescription = null) },
+            text = { Text(stringResource(R.string.kpm_add)) },
+        )
+    }
 
-        Text(
-            text = stringResource(R.string.kpm_note),
-            style = MaterialTheme.typography.bodySmall,
+    pendingPath?.let { path ->
+        LoadMethodDialog(
+            fileName = File(path).name,
+            enabled = enabled,
+            onDismiss = { pendingPath = null },
+            onLoad = {
+                pendingPath = null
+                runAction { kpmLoadReport(path) }
+            },
+            onEmbed = {
+                pendingPath = null
+                runAction { kpmInstallReport(path, loadNow = true) }
+            },
         )
     }
 
@@ -430,12 +411,77 @@ fun KpmPager(
     }
 }
 
-/** 一行模块卡片：名称/状态/版本作者、说明，右侧是"开机加载"开关，底部是三个动作。 */
+/** 选好文件之后才问怎么加载，只给「加载」和「嵌入」两项。 */
+@Composable
+private fun LoadMethodDialog(
+    fileName: String,
+    enabled: Boolean,
+    onDismiss: () -> Unit,
+    onLoad: () -> Unit,
+    onEmbed: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.kpm_method_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(fileName, style = MaterialTheme.typography.bodyMedium)
+                MethodOption(
+                    label = stringResource(R.string.kpm_method_load),
+                    summary = stringResource(R.string.kpm_method_load_summary),
+                    enabled = enabled,
+                    onClick = onLoad,
+                )
+                MethodOption(
+                    label = stringResource(R.string.kpm_method_embed),
+                    summary = stringResource(R.string.kpm_method_embed_summary),
+                    enabled = enabled,
+                    onClick = onEmbed,
+                )
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(android.R.string.cancel))
+            }
+        },
+    )
+}
+
+@Composable
+private fun MethodOption(
+    label: String,
+    summary: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(label, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Medium)
+            Text(
+                text = summary,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** 一行模块卡片，和模块页的观感一致。 */
 @Composable
 private fun ModuleCard(
     entry: KpmEntry,
     enabled: Boolean,
-    onToggle: (Boolean) -> Unit,
     onControl: () -> Unit,
     onInfo: () -> Unit,
     onUnload: () -> Unit,
@@ -448,64 +494,48 @@ private fun ModuleCard(
         shape = MaterialTheme.shapes.large,
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
+            Column(
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 14.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp),
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = entry.name,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
-                        maxLines = 2,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         text = when {
-                            !entry.installed -> stringResource(R.string.kpm_temporary_label)
-                            entry.disabled -> stringResource(R.string.kpm_disabled_label)
-                            else -> stringResource(R.string.kpm_installed_label)
+                            !entry.embedded -> stringResource(R.string.kpm_status_loaded_only)
+                            entry.loaded -> stringResource(R.string.kpm_status_embedded_loaded)
+                            else -> stringResource(R.string.kpm_status_embedded)
                         },
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                     )
-                    if (entry.version.isNotEmpty() || entry.author.isNotEmpty()) {
-                        Text(
-                            text = if (entry.author.isNotEmpty()) {
-                                stringResource(R.string.kpm_version_author, entry.version, entry.author)
-                            } else {
-                                entry.version
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                }
+                if (entry.version.isNotEmpty() || entry.author.isNotEmpty()) {
                     Text(
-                        text = stringResource(R.string.kpm_loaded_label, if (entry.loaded) {
-                            stringResource(R.string.kpm_loaded_yes)
+                        text = if (entry.author.isNotEmpty()) {
+                            stringResource(R.string.kpm_version_author, entry.version, entry.author)
                         } else {
-                            stringResource(R.string.kpm_loaded_no)
-                        }),
+                            entry.version
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-
-                if (entry.installed) {
-                    Switch(checked = !entry.disabled, enabled = enabled, onCheckedChange = onToggle)
+                if (entry.description.isNotEmpty()) {
+                    Text(
+                        text = entry.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                    )
                 }
-            }
-
-            if (entry.description.isNotEmpty()) {
-                Text(
-                    text = entry.description,
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 6.dp),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.outline,
-                )
             }
 
             HorizontalDivider(
@@ -531,7 +561,7 @@ private fun ModuleCard(
                         Text(stringResource(R.string.kpm_unload))
                     }
                 }
-                if (entry.installed) {
+                if (entry.embedded) {
                     TextButton(enabled = enabled, onClick = onRemove) {
                         Text(stringResource(R.string.kpm_remove))
                     }
@@ -579,24 +609,4 @@ private fun ControlDialog(
             }
         },
     )
-}
-
-@Composable
-private fun SectionCard(title: String, content: @Composable () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.55f),
-        ),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(text = title, style = MaterialTheme.typography.titleMedium)
-            content()
-        }
-    }
 }

@@ -448,4 +448,13 @@
     <string name="kpm_version_author">%1$s, by %2$s</string>
     <string name="kpm_remove_confirm">Remove %1$s? It is unloaded first, then its files are deleted.</string>
     <string name="kpm_store_hint">Store: %1$s</string>
+    <string name="kpm_add">Add</string>
+    <string name="kpm_method_title">How should this module be loaded?</string>
+    <string name="kpm_method_load">Load</string>
+    <string name="kpm_method_load_summary">Loads it into the running kernel only. It is gone after a reboot.</string>
+    <string name="kpm_method_embed">Embed</string>
+    <string name="kpm_method_embed_summary">Stores it under /data/adb/kpm/&lt;id&gt; and loads it now; the kernel loads it again on every boot.</string>
+    <string name="kpm_status_loaded_only">Loaded</string>
+    <string name="kpm_status_embedded_loaded">Embedded · loaded</string>
+    <string name="kpm_status_embedded">Embedded</string>
 </resources>
