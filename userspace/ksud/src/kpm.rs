@@ -23,7 +23,7 @@ fn ensure_supported() -> Result<()> {
             KPM_MIN_UAPI_VERSION
         );
     }
-    let state = ksucalls::get_feature(ksu_uapi::ksu_feature_id_KSU_FEATURE_KPM as u32)?;
+    let state = ksucalls::get_feature(ksu_uapi::ksu_feature_id_KSU_FEATURE_KPM)?;
     if !state.supported {
         bail!("this kernel build does not support the kpm feature");
     }
@@ -646,7 +646,7 @@ pub fn doctor() -> Result<()> {
     );
 
     if interface_present {
-        match ksucalls::get_feature(ksu_uapi::ksu_feature_id_KSU_FEATURE_KPM as u32) {
+        match ksucalls::get_feature(ksu_uapi::ksu_feature_id_KSU_FEATURE_KPM) {
             Ok(state) => println!(
                 "kpm feature    : supported={} enabled={} forced={}",
                 state.supported,

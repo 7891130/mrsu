@@ -632,12 +632,12 @@ pub fn run() -> Result<()> {
 
         Commands::Kpm { command } => match command {
             Kpm::Load { module, args } => {
-                let args = if args.is_empty() {
+                let joined = if args.is_empty() {
                     None
                 } else {
                     Some(args.join(" "))
                 };
-                kpm::load(&module, args.as_deref())
+                kpm::load(&module, joined.as_deref())
             }
             Kpm::Unload { name } => kpm::unload(&name),
             Kpm::List => kpm::list(),
@@ -649,10 +649,9 @@ pub fn run() -> Result<()> {
             Kpm::Uninstall { id } => kpm::uninstall(&id),
             Kpm::Enable { id } => kpm::set_enabled(&id, true),
             Kpm::Disable { id } => kpm::set_enabled(&id, false),
-            Kpm::Installed => kpm::list_installed(),
+            Kpm::Installed | Kpm::Staged => kpm::list_installed(),
             Kpm::Stage { module } => kpm::install(&module, false),
             Kpm::Unstage { name } => kpm::uninstall(&name),
-            Kpm::Staged => kpm::list_installed(),
             Kpm::Insmod { kmi } => kpm::insmod(kmi),
             Kpm::Doctor => kpm::doctor(),
         },
