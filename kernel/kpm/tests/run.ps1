@@ -40,15 +40,23 @@ function Invoke-Suite {
 
 $kpm = Join-Path $kdir 'kpm'
 
-Invoke-Suite -Label '[1/9] relocation'       -Test 'test_reloc.c'      -Sources @(Join-Path $kpm 'kpm_reloc.c')
-Invoke-Suite -Label '[2/9] elf loader'       -Test 'test_elf.c'        -Sources @((Join-Path $kpm 'kpm_elf.c'), (Join-Path $kpm 'kpm_reloc.c'))
-Invoke-Suite -Label '[3/9] instructions'     -Test 'test_insn.c'       -Sources @(Join-Path $kpm 'kpm_insn.c')
-Invoke-Suite -Label '[4/9] hook planner'     -Test 'test_hook.c'       -Sources @((Join-Path $kpm 'kpm_hook.c'), (Join-Path $kpm 'kpm_insn.c'))
-Invoke-Suite -Label '[5/9] hook registry'    -Test 'test_hook_table.c' -Sources @(Join-Path $kpm 'kpm_hook_table.c')
-Invoke-Suite -Label '[6/9] hook frames'      -Test 'test_hook_fargs.c' -Sources @(Join-Path $kpm 'kpm_hook_chain.c')
-Invoke-Suite -Label '[7/9] module table + owner routing' -Test 'test_core.c' -Sources @((Join-Path $here 'host_fs.c'), (Join-Path $kpm 'kpm_core.c'), (Join-Path $kpm 'kpm_table.c'))
-Invoke-Suite -Label '[8/9] kfunc layer'      -Test 'test_kfunc.c'      -Sources @(Join-Path $kpm 'kpm_kfunc.c')
-Invoke-Suite -Label '[9/9] standalone runtime' -Test 'test_standalone.c' -Sources @((Join-Path $here 'host_fs.c'), (Join-Path $kpm 'kpm_standalone.c'), (Join-Path $kpm 'kpm_core.c'), (Join-Path $kpm 'kpm_table.c'))
+Invoke-Suite -Label '[1/10] relocation'       -Test 'test_reloc.c'      -Sources @(Join-Path $kpm 'kpm_reloc.c')
+Invoke-Suite -Label '[2/10] elf loader'       -Test 'test_elf.c'        -Sources @((Join-Path $kpm 'kpm_elf.c'), (Join-Path $kpm 'kpm_reloc.c'))
+Invoke-Suite -Label '[3/10] instructions'     -Test 'test_insn.c'       -Sources @(Join-Path $kpm 'kpm_insn.c')
+Invoke-Suite -Label '[4/10] hook planner'     -Test 'test_hook.c'       -Sources @((Join-Path $kpm 'kpm_hook.c'), (Join-Path $kpm 'kpm_insn.c'))
+Invoke-Suite -Label '[5/10] hook registry'    -Test 'test_hook_table.c' -Sources @(Join-Path $kpm 'kpm_hook_table.c')
+Invoke-Suite -Label '[6/10] hook frames'      -Test 'test_hook_fargs.c' -Sources @(Join-Path $kpm 'kpm_hook_chain.c')
+Invoke-Suite -Label '[7/10] module table + owner routing' -Test 'test_core.c' -Sources @((Join-Path $here 'host_fs.c'), (Join-Path $kpm 'kpm_core.c'), (Join-Path $kpm 'kpm_table.c'))
+Invoke-Suite -Label '[8/10] kfunc layer'      -Test 'test_kfunc.c'      -Sources @(Join-Path $kpm 'kpm_kfunc.c')
+Invoke-Suite -Label '[9/10] standalone runtime' -Test 'test_standalone.c' -Sources @((Join-Path $here 'host_fs.c'), (Join-Path $kpm 'kpm_standalone.c'), (Join-Path $kpm 'kpm_core.c'), (Join-Path $kpm 'kpm_table.c'))
+
+Write-Host ''
+Write-Host '== [10/10] sample module'
+$sampleExe = Join-Path $out 'test_sample'
+& gcc @common -o $sampleExe (Join-Path $here 'test_sample.c') (Join-Path $kpm 'kpm_elf.c') (Join-Path $kpm 'kpm_reloc.c')
+if ($LASTEXITCODE -ne 0) { throw 'sample module test failed to compile' }
+& $sampleExe (Join-Path $here '..\samples\ptest\ptest.kpm')
+if ($LASTEXITCODE -ne 0) { $failed = 1 }
 
 Write-Host ''
 if ($failed -ne 0) { Write-Host 'SOME SUITES FAILED'; exit 1 }
