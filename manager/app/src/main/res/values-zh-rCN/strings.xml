@@ -438,4 +438,5 @@
     <string name="kpm_loaded_no">未加载</string>
     <string name="kpm_version_author">%1$s，作者 %2$s</string>
     <string name="kpm_remove_confirm">删除 %1$s？会先卸载，再删除它的文件。</string>
+    <string name="kpm_store_hint">安装目录：%1$s</string>
 </resources>

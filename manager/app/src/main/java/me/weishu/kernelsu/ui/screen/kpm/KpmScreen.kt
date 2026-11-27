@@ -255,6 +255,15 @@ fun KpmPager(
             }
         }
 
+        // Which directory the list comes from. It doubles as a build marker: an
+        // older APK has no such line, so "no change" can be told apart from
+        // "old build still installed".
+        Text(
+            text = stringResource(R.string.kpm_store_hint, "/data/adb/kpm"),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
         unavailableReason?.let { reason ->
             SectionCard(title = stringResource(R.string.kpm_unavailable)) {
                 Text(text = reason, style = MaterialTheme.typography.bodyMedium)
@@ -297,6 +306,16 @@ fun KpmPager(
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.padding(vertical = 24.dp),
             )
+            // An empty list has two very different causes: nothing is installed,
+            // or `ksud kpm installed` could not answer at all. Show its words
+            // instead of a bare "no modules".
+            if (installedText.isNotBlank() && installedText != resultText) {
+                Text(
+                    text = installedText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         } else {
             visible.forEach { entry ->
                 ModuleCard(
