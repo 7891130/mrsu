@@ -340,9 +340,7 @@ pub fn insmod(kmi: Option<String>) -> Result<()> {
 
     let ko_name = format!("{kmi}_kpm.ko");
     let data = crate::assets::get_asset_data(&ko_name).with_context(|| {
-        format!(
-            "this ksud does not embed {ko_name}; the standalone runtime only ships for aarch64"
-        )
+        format!("this ksud does not embed {ko_name}; the standalone runtime only ships for aarch64")
     })?;
 
     ksuinit::load_module(&data, cstr!("")).with_context(|| format!("failed to load {ko_name}"))?;
@@ -424,9 +422,7 @@ pub fn doctor() -> Result<()> {
     // 独立运行时是否接管了控制通道：kpm.ko 是独立内核模块，加载后 /sys/module/kpm 存在。
     let standalone_loaded = Path::new("/sys/module/kpm").exists();
     let embedded = crate::boot_patch::get_current_kmi()
-        .ok()
-        .map(|kmi| crate::assets::get_asset_data(&format!("{kmi}_kpm.ko")).is_ok())
-        .unwrap_or(false);
+        .is_ok_and(|kmi| crate::assets::get_asset_data(&format!("{kmi}_kpm.ko")).is_ok());
     println!(
         "standalone     : {}",
         match (standalone_loaded, embedded) {
