@@ -31,6 +31,16 @@ avoids on purpose.
 instead of only the hand-built ones. Rebuild and commit it whenever `ptest.c`
 changes.
 
+## What the host test can and cannot do
+
+`test_sample.c` runs the real `kpm_elf_load()` over this image and checks the
+parsed metadata plus the entry slots (each must be relocated to an address
+inside the loaded image). It **cannot call** the entries: they are AArch64
+machine code and the harness runs on the host — an earlier version of that test
+did try, and died with SIGSEGV, which is a property of the harness and not of
+the module. Calling them is what the device does, and what the `dmesg` lines
+below are for.
+
 ## Use on device
 
 ```bash

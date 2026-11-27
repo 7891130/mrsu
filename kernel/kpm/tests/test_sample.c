@@ -92,8 +92,15 @@ static unsigned char *read_file(const char *path, size_t *len)
     return buf;
 }
 
-int main(int argc, char **argv)
+static int entry_in_image(const struct kpm_module *mod, const void *entry)
 {
+    uintptr_t e = (uintptr_t)entry;
+    uintptr_t base = (uintptr_t)mod->image;
+
+    return mod->image != NULL && e >= base && e < base + mod->image_size;
+}
+
+int main(int argc, char **argv){
     struct kpm_module mod;
     char err[200];
     unsigned char *data;
@@ -139,12 +146,17 @@ int main(int argc, char **argv)
     check(mod.ctl1 != NULL, ".kpm.ctl1 slot bound");
     check(mod.event != NULL, ".kpm.event slot bound");
 
-    puts("calling into the loaded image");
-    check(mod.init != NULL && mod.init("arg=hello", "load-file", NULL) == 0, "init returns 0");
-    check(mod.ctl1 != NULL && mod.ctl1((void *)1, (void *)2, (void *)3) == 6, "ctl1 sums its args");
-    check(mod.ctl0 != NULL && mod.ctl0("hello", NULL, 0) == 5, "ctl0 reports the argument length");
-    check(mod.event != NULL && mod.event("boot-completed", NULL, NULL) == 0, "event handler returns 0");
-    check(mod.exit != NULL && mod.exit(NULL) == 0, "exit returns 0");
+    // The entries are AArch64 machine code -- this harness runs on the host, so
+    // calling them would execute the wrong instruction set. What can be checked
+    // here is that the ABS64 relocation in each slot produced an address inside
+    // the loaded image (and not 0, a file offset or a stale value).
+    puts("entry relocation");
+    check(entry_in_image(&mod, (const void *)mod.init), "init points into the image");
+    check(entry_in_image(&mod, (const void *)mod.exit), "exit points into the image");
+    check(entry_in_image(&mod, (const void *)mod.ctl0), "ctl0 points into the image");
+    check(entry_in_image(&mod, (const void *)mod.ctl1), "ctl1 points into the image");
+    check(entry_in_image(&mod, (const void *)mod.event), "event points into the image");
+    check((const void *)mod.init != (const void *)mod.exit, "distinct entries stay distinct");
     check(resolve_calls == 0, "no symbol resolution was needed");
 
     puts("release");
