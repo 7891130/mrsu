@@ -263,19 +263,35 @@ fn installed_entries(dir: &Path) -> Result<Vec<InstalledEntry>> {
     };
     for entry in read.flatten() {
         let path = entry.path();
-        if !path.is_dir() {
+
+        // The store layout: <dir>/<id>/<id>.kpm .
+        if path.is_dir() {
+            let id = entry.file_name().to_string_lossy().into_owned();
+            let file = path.join(format!("{id}.kpm"));
+            if !is_kpm(&file) {
+                continue;
+            }
+            entries.push(InstalledEntry {
+                disabled: path.join("disable").exists(),
+                id,
+                file,
+            });
             continue;
         }
-        let id = entry.file_name().to_string_lossy().into_owned();
-        let file = path.join(format!("{id}.kpm"));
-        if !is_kpm(&file) {
-            continue;
+
+        // Older layout: a .kpm dropped straight into the directory. Those used
+        // to be invisible here, which made them look like a module that cannot
+        // be removed -- they only showed up as "loaded" from the kernel.
+        if is_kpm(&path) {
+            let Some(id) = path.file_stem().map(|stem| stem.to_string_lossy().into_owned()) else {
+                continue;
+            };
+            entries.push(InstalledEntry {
+                disabled: false,
+                id,
+                file: path,
+            });
         }
-        entries.push(InstalledEntry {
-            disabled: path.join("disable").exists(),
-            id,
-            file,
-        });
     }
     entries.sort_by(|a, b| a.id.cmp(&b.id));
     Ok(entries)

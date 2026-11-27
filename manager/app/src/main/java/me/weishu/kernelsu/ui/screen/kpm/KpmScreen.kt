@@ -260,7 +260,7 @@ fun KpmPager(
     removeTarget?.let { entry ->
         ConfirmDialog(
             title = context.getString(R.string.kpm_remove),
-            message = context.getString(R.string.kpm_remove_confirm, entry.name),
+            message = context.getString(R.string.kpm_remove_confirm, entry.name, entry.id),
             confirm = context.getString(R.string.kpm_remove),
             onDismiss = { removeTarget = null },
             onConfirm = {
