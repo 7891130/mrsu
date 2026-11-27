@@ -1,6 +1,7 @@
 package me.weishu.kernelsu.ui.util
 
 import android.net.Uri
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
@@ -66,20 +67,35 @@ internal suspend fun isDownloadAvailable(uri: Uri): Boolean = withContext(Dispat
  */
 private const val UPDATE_MANIFEST_URL = "https://mingri.xyz/mrsu/latest.json"
 
+private const val UPDATE_TAG = "MRSU-Update"
+
 fun checkNewVersion(): LatestVersionInfo {
-    if (!isNetworkAvailable(ksuApp)) return LatestVersionInfo()
-    // default null value if failed
     val defaultValue = LatestVersionInfo()
-    runCatching {
-        ksuApp.okhttpClient.newCall(Request.Builder().url(UPDATE_MANIFEST_URL).build()).execute()
-            .use { response ->
-                if (!response.isSuccessful) {
-                    return defaultValue
-                }
-                parseVersionManifest(response.body.string()) ?: defaultValue
+
+    // 这里不能拿 isNetworkAvailable() 当闸门：它要求 NET_CAPABILITY_VALIDATED，
+    // 而部分设备/模拟器（以及飞行模式刚恢复的短暂窗口）拿不到这个能力，会被误判成没网。
+    // 公告那条路径早就因为同样的原因绕开了它（见 Announcement.kt），这里保持一致：
+    // 直接发请求，失败就静默返回空结果。
+    return runCatching {
+        ksuApp.okhttpClient.newCall(
+            Request.Builder()
+                .url(UPDATE_MANIFEST_URL)
+                // 共享 OkHttp 客户端带 10MB 磁盘缓存；清单表示"当前最新版本"，
+                // 一旦命中缓存就会一直读到旧值，表现为"服务器发布了，管理器却看不到"。
+                .header("Cache-Control", "no-cache")
+                .build()
+        ).execute().use { response ->
+            Log.d(UPDATE_TAG, "manifest http ${response.code}, cacheHit=${response.cacheResponse != null}")
+            if (!response.isSuccessful) {
+                return defaultValue
             }
-    }
-    return defaultValue
+            val body = response.body.string()
+            Log.d(UPDATE_TAG, "manifest body=${body.take(200)}")
+            parseVersionManifest(body) ?: defaultValue.also {
+                Log.w(UPDATE_TAG, "manifest cannot be parsed")
+            }
+        }
+    }.onFailure { Log.w(UPDATE_TAG, "manifest fetch failed", it) }.getOrDefault(defaultValue)
 }
 
 /** 解析版本清单；无法识别时返回 null。 */
