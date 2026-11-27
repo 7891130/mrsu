@@ -436,4 +436,15 @@
     <string name="bootloader_warning_confirm">Bootloader unlocked, continue</string>
     <string name="bootloader_warning_confirm_flash">Confirm and flash</string>
     <string name="bootloader_warning_dismiss">Cancel</string>
+    <string name="kpm_import_load">Import and load</string>
+    <string name="kpm_import_only">Install only</string>
+    <string name="kpm_search">Search modules</string>
+    <string name="kpm_installed_label">Installed</string>
+    <string name="kpm_disabled_label">Disabled at boot</string>
+    <string name="kpm_temporary_label">Temporarily loaded</string>
+    <string name="kpm_loaded_label">%1$s</string>
+    <string name="kpm_loaded_yes">Loaded</string>
+    <string name="kpm_loaded_no">Not loaded</string>
+    <string name="kpm_version_author">%1$s, by %2$s</string>
+    <string name="kpm_remove_confirm">Remove %1$s? It is unloaded first, then its files are deleted.</string>
 </resources>

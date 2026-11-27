@@ -199,21 +199,26 @@ fun kpmList(): String {
     return out.joinToString("\n").trim()
 }
 
-/** Modules staged for boot: one file name per line. */
-fun kpmStaged(): String {
+/** Installed modules, one TSV line each: id, name, version, author, disabled, loaded, description. */
+fun kpmInstalled(): String {
     val shell = getRootShell()
     val out = shell.newJob()
-        .add("${getKsuDaemonPath()} kpm staged").to(ArrayList<String>(), null).exec().out
+        .add("${getKsuDaemonPath()} kpm installed").to(ArrayList<String>(), null).exec().out
     return out.joinToString("\n").trim()
 }
+
 
 fun kpmLoad(path: String): Boolean = execKsud("kpm load ${shellQuote(path)}")
 
 fun kpmUnload(name: String): Boolean = execKsud("kpm unload ${shellQuote(name)}")
 
-fun kpmStage(path: String): Boolean = execKsud("kpm stage ${shellQuote(path)}")
+fun kpmInstall(path: String, loadNow: Boolean = true): Boolean =
+    execKsud(if (loadNow) "kpm install ${shellQuote(path)}" else "kpm install --no-load ${shellQuote(path)}")
 
-fun kpmUnstage(name: String): Boolean = execKsud("kpm unstage ${shellQuote(name)}")
+fun kpmUninstall(id: String): Boolean = execKsud("kpm uninstall ${shellQuote(id)}")
+
+fun kpmSetEnabled(id: String, enabled: Boolean): Boolean =
+    execKsud("kpm ${if (enabled) "enable" else "disable"} ${shellQuote(id)}")
 /** Run a ksud command and return its combined stdout/stderr, for display. */
 private fun runKsud(args: String): String {
     val shell = getRootShell()
@@ -226,8 +231,10 @@ private fun runKsud(args: String): String {
 /** Load a .kpm and return the runtime's report (diagnostics included). */
 fun kpmLoadReport(path: String): String = runKsud("kpm load ${shellQuote(path)}")
 
-/** Stage a .kpm for boot and return the report. */
-fun kpmStageReport(path: String): String = runKsud("kpm stage ${shellQuote(path)}")
+/** Install a .kpm into the store (and optionally load it), returning the report. */
+fun kpmInstallReport(path: String, loadNow: Boolean = true): String =
+    if (loadNow) runKsud("kpm install ${shellQuote(path)}")
+    else runKsud("kpm install --no-load ${shellQuote(path)}")
 
 /** Unload a loaded .kpm and return the report. */
 fun kpmUnloadReport(name: String): String = runKsud("kpm unload ${shellQuote(name)}")
@@ -235,8 +242,12 @@ fun kpmUnloadReport(name: String): String = runKsud("kpm unload ${shellQuote(nam
 /** Show a loaded module's details. */
 fun kpmInfoReport(name: String): String = runKsud("kpm info ${shellQuote(name)}")
 
-/** Stop loading a staged .kpm on boot, returning the report. */
-fun kpmUnstageReport(name: String): String = runKsud("kpm unstage ${shellQuote(name)}")
+/** Uninstall a module (it is unloaded first), returning the report. */
+fun kpmUninstallReport(id: String): String = runKsud("kpm uninstall ${shellQuote(id)}")
+
+/** Turn a module's boot load on or off, returning the report. */
+fun kpmSetEnabledReport(id: String, enabled: Boolean): String =
+    runKsud("kpm ${if (enabled) "enable" else "disable"} ${shellQuote(id)}")
 
 /** Load a plain kernel module (.ko) with symbol resolution, for the report. */
 fun insmodReport(path: String): String = runKsud("insmod ${shellQuote(path)}")

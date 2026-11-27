@@ -427,4 +427,15 @@
     <string name="kpm_unavailable_kernel">当前内核没有 KPM 接口（uapi %1$d &lt; %2$d）：需要更新内核模块。</string>
     <string name="kpm_unavailable_root">需要 root 权限。</string>
     <string name="kpm_note">临时加载的模块重启后失效；加入开机加载的模块每次开机自动载入。</string>
+    <string name="kpm_import_load">导入并加载</string>
+    <string name="kpm_import_only">仅安装</string>
+    <string name="kpm_search">搜索模块</string>
+    <string name="kpm_installed_label">已安装</string>
+    <string name="kpm_disabled_label">开机禁用</string>
+    <string name="kpm_temporary_label">临时加载</string>
+    <string name="kpm_loaded_label">%1$s</string>
+    <string name="kpm_loaded_yes">已加载</string>
+    <string name="kpm_loaded_no">未加载</string>
+    <string name="kpm_version_author">%1$s，作者 %2$s</string>
+    <string name="kpm_remove_confirm">删除 %1$s？会先卸载，再删除它的文件。</string>
 </resources>

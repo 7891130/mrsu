@@ -60,17 +60,42 @@ enum Kpm {
     },
     /// Load every .kpm staged in /data/adb/kpm
     Autoload,
-    /// Copy a .kpm into /data/adb/kpm so it is loaded on every boot
+    /// Install a .kpm into /data/adb/kpm/<id>/ and load it now
+    Install {
+        /// module path
+        module: PathBuf,
+        /// install only; do not load it now
+        #[arg(long)]
+        no_load: bool,
+    },
+    /// Remove an installed module, unloading it first
+    Uninstall {
+        /// module id (or file name for the old loose layout)
+        id: String,
+    },
+    /// Let an installed module load at boot again
+    Enable {
+        /// module id
+        id: String,
+    },
+    /// Keep a module installed but stop loading it at boot
+    Disable {
+        /// module id
+        id: String,
+    },
+    /// List installed modules (TSV: id, name, version, author, disabled, loaded, description)
+    Installed,
+    /// Copy a .kpm into /data/adb/kpm (old layout; same as install --no-load)
     Stage {
         /// module path
         module: PathBuf,
     },
-    /// Stop loading a staged .kpm on boot
+    /// Remove a module by id or file name (same as uninstall)
     Unstage {
-        /// module file name or module name
+        /// module id or file name
         name: String,
     },
-    /// List the .kpm images staged for boot
+    /// List installed modules (same as `installed`)
     Staged,
     /// Load the ksud-bundled standalone runtime (kpm.ko) into the kernel
     Insmod {
@@ -620,9 +645,14 @@ pub fn run() -> Result<()> {
             Kpm::Ctl0 { name, args } => kpm::ctl0(&name, &args.join(" ")),
             Kpm::Ctl1 { name, a1, a2, a3 } => kpm::ctl1(&name, a1, a2, a3).map(|_| ()),
             Kpm::Autoload => kpm::autoload(),
-            Kpm::Stage { module } => kpm::stage(&module),
-            Kpm::Unstage { name } => kpm::unstage(&name),
-            Kpm::Staged => kpm::list_staged(),
+            Kpm::Install { module, no_load } => kpm::install(&module, !no_load),
+            Kpm::Uninstall { id } => kpm::uninstall(&id),
+            Kpm::Enable { id } => kpm::set_enabled(&id, true),
+            Kpm::Disable { id } => kpm::set_enabled(&id, false),
+            Kpm::Installed => kpm::list_installed(),
+            Kpm::Stage { module } => kpm::install(&module, false),
+            Kpm::Unstage { name } => kpm::uninstall(&name),
+            Kpm::Staged => kpm::list_installed(),
             Kpm::Insmod { kmi } => kpm::insmod(kmi),
             Kpm::Doctor => kpm::doctor(),
         },
