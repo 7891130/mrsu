@@ -102,7 +102,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 import top.yukonga.miuix.kmp.utils.overScrollVertical
 import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
-private const val SHOW_APP_BACKGROUND_SETTINGS = false
+private const val SHOW_APP_BACKGROUND_SETTINGS = true
 
 @Composable
 fun ColorPaletteScreenMiuix(

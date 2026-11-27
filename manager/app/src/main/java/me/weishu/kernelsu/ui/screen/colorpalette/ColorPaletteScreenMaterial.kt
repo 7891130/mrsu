@@ -104,7 +104,7 @@ import me.weishu.kernelsu.ui.theme.rememberKernelSUColorScheme
 import me.weishu.kernelsu.ui.util.hasAppBackground
 import kotlin.math.roundToInt
 
-private const val SHOW_APP_BACKGROUND_SETTINGS = false
+private const val SHOW_APP_BACKGROUND_SETTINGS = true
 
 @Composable
 fun ColorPaletteScreenMaterial(
