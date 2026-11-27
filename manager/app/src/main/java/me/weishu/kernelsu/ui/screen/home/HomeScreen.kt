@@ -29,6 +29,7 @@ import me.weishu.kernelsu.ui.component.dialog.BootloaderWarningDialog
 import me.weishu.kernelsu.ui.component.dialog.rememberBootloaderWarningContent
 import me.weishu.kernelsu.ui.component.dialog.rememberConfirmDialog
 import me.weishu.kernelsu.ui.component.dialog.rememberLoadingDialog
+import me.weishu.kernelsu.ui.component.rebootlistpopup.rememberRebootAction
 import me.weishu.kernelsu.ui.navigation3.Navigator
 import me.weishu.kernelsu.ui.navigation3.Route
 import me.weishu.kernelsu.ui.util.lastShownAnnouncementId
@@ -62,6 +63,7 @@ fun HomePager(
         )
     }
     val scope = rememberCoroutineScope()
+    val restartAction = rememberRebootAction()
     val latestIsCurrentPage by rememberUpdatedState(isCurrentPage)
     val initialResumeHandled = rememberSaveable { mutableStateOf(false) }
 
@@ -120,6 +122,7 @@ fun HomePager(
                 }
             }
         },
+        onRestartClick = { restartAction("") },
     )
 
     when (LocalUiMode.current) {

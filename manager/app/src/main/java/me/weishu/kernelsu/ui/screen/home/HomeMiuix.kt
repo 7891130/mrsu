@@ -145,10 +145,23 @@ fun HomePagerMiuix(
                         }
                         if (state.requiresNewKernel) {
                             WarningCard(
-                                stringResource(
-                                    id = if (state.canInstallKernelUpdate) R.string.require_kernel_version else R.string.require_kernel_version_gki
-                                ),
-                                onClick = if (state.canInstallKernelUpdate) actions.onInstallClick else null
+                                message = if (state.kernelUpdateNeedsRejailbreak) {
+                                    // 越狱模式刷不了分区：内核端只能靠「重启 + 重新越狱」换新的 ko。
+                                    stringResource(
+                                        R.string.require_kernel_version_late_load,
+                                        state.kernelUAPIVersion ?: 0,
+                                        state.managerUAPIVersion,
+                                    )
+                                } else {
+                                    stringResource(
+                                        id = if (state.canInstallKernelUpdate) R.string.require_kernel_version else R.string.require_kernel_version_gki
+                                    )
+                                },
+                                onClick = when {
+                                    state.kernelUpdateNeedsRejailbreak -> actions.onRestartClick
+                                    state.canInstallKernelUpdate -> actions.onInstallClick
+                                    else -> null
+                                }
                             )
                         }
                         if (state.requiresNewManager) {

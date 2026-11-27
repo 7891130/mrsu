@@ -384,6 +384,7 @@
     <string name="script_param_below_min">不能小于 %d</string>
     <string name="script_param_above_max">不能大于 %d</string>
     <string name="script_param_invalid">无效的值</string>
+    <string name="require_kernel_version_late_load">内核端版本低于管理器（uapi %1$d &lt; %2$d）。越狱模式无法通过刷写更新：重启设备并重新越狱，管理器内置的新版内核模块才会载入。点此重启。</string>
     <string name="bootloader_warning_title">警告</string>
     <string name="bootloader_warning_message">请确认设备已解锁 BL 才能刷入。</string>
     <string name="bootloader_warning_direct_install_message">即将修补并刷写当前设备的 boot 分区。</string>

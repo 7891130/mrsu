@@ -49,6 +49,11 @@ data class HomeUiState(
     val canInstallKernelUpdate: Boolean
         get() = lkmMode == true && !isLateLoadMode
 
+    // 越狱模式下内核端落后（uapi 比管理器低）：不能靠刷写更新，只能重启后重新越狱，
+    // 那时 ksud 才会把管理器内置的新版 kernelsu.ko 载入内核。
+    val kernelUpdateNeedsRejailbreak: Boolean
+        get() = isLateLoadMode && requiresNewKernel
+
     val showCustomLkmBadge: Boolean
         get() = lkmMode == true && !isLkmBundled
 
@@ -70,4 +75,6 @@ data class HomeActions(
     val onInstallClick: () -> Unit,
     val onOpenUrl: (String) -> Unit,
     val onJailbreakClick: () -> Unit = {},
+    /** 越狱模式下内核端落后时，唯一的补救手段是重启后重新越狱。 */
+    val onRestartClick: () -> Unit = {},
 )
