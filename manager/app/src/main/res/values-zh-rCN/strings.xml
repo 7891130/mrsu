@@ -394,4 +394,37 @@
     <string name="bootloader_warning_confirm">已解锁，继续</string>
     <string name="bootloader_warning_confirm_flash">确认刷入</string>
     <string name="bootloader_warning_dismiss">取消</string>
+    <!-- KPM -->
+    <string name="kpm_tab">KPM</string>
+    <string name="settings_kpm">KernelPatch 模块</string>
+    <string name="settings_kpm_summary">加载 .kpm 模块，可临时或开机加载</string>
+    <string name="kpm_page_title">KPM 模块</string>
+    <string name="kpm_refresh">刷新</string>
+    <string name="kpm_import">导入 .kpm</string>
+    <string name="kpm_stage_for_boot">加入开机加载</string>
+    <string name="kpm_integration">KPM 集成</string>
+    <string name="kpm_standalone_loaded">独立运行时（kpm.ko）已接管 KPM 通道，重启后消失。</string>
+    <string name="kpm_standalone_idle">当前使用内核模块内置的运行时。加载 kpm.ko 可把通道交给独立运行时。</string>
+    <string name="kpm_standalone_load">加载独立运行时</string>
+    <string name="kpm_doctor">诊断</string>
+    <string name="kpm_insmod_ko">加载 .ko</string>
+    <string name="kpm_loaded">已加载模块</string>
+    <string name="kpm_empty">未发现模块</string>
+    <string name="kpm_parameters">参数：%1$s</string>
+    <string name="kpm_control">控制</string>
+    <string name="kpm_control_title">控制 KPModule</string>
+    <string name="kpm_control_run">执行</string>
+    <string name="kpm_arguments">参数</string>
+    <string name="kpm_info">详情</string>
+    <string name="kpm_unload">卸载</string>
+    <string name="kpm_unload_message">卸载 %1$s 模块？</string>
+    <string name="kpm_staged">开机加载</string>
+    <string name="kpm_staged_empty">开机清单为空</string>
+    <string name="kpm_remove">移除文件</string>
+    <string name="kpm_last_result">最近结果</string>
+    <string name="kpm_unavailable">不可用</string>
+    <string name="kpm_unavailable_not_manager">内核端没有认出这个管理器。</string>
+    <string name="kpm_unavailable_kernel">当前内核没有 KPM 接口（uapi %1$d &lt; %2$d）：需要更新内核模块。</string>
+    <string name="kpm_unavailable_root">需要 root 权限。</string>
+    <string name="kpm_note">临时加载的模块重启后失效；加入开机加载的模块每次开机自动载入。</string>
 </resources>

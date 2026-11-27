@@ -44,9 +44,13 @@ MRSU 在 KernelSU 之上实现了一套 KernelPatch Module（`.kpm`）运行时�
 - 路由调用全程持 owner 互斥锁，所以 `kpm.ko` 的 `module_exit` 不会在命令执行到一半时把表拆掉。
 
 ```bash
-insmod /data/adb/modules/<某个模块>/kpm.ko     # 之后 ksud kpm 命令就落在 kpm.ko 里
-dmesg | grep -i kpm                            # "runtime owns the control channel"
+ksud kpm insmod                               # 载入 APK 内置的 kpm.ko（按当前 KMI 选）
+insmod /data/adb/modules/<某个模块>/kpm.ko    # 或者自己 insmod 一份
+dmesg | grep -i kpm                           # "runtime owns the control channel"
 ```
+
+管理器里：KPM → **KPM 集成** → 「加载独立运行时」，同一件事；旁边的「诊断」跑的是
+`ksud kpm doctor`，第一行 `standalone:` 会告诉你现在是谁在服务控制通道。
 
 ## 加载流程
 
@@ -101,15 +105,16 @@ ksud kpm stage /path/to/foo.kpm               # 放入 /data/adb/kpm，开机自
 ksud kpm unstage foo.kpm                      # 取消开机加载
 ksud kpm staged                               # 开机清单
 ksud kpm autoload                             # 手动触发（post-fs-data 已自动调用）
+ksud kpm insmod                               # 载入 APK 内置的独立运行时 kpm.ko
 ksud kpm ctl0 <name> <args...>                # 模块自定义控制
-ksud kpm doctor                               # 排障：接口/feature/ioctl/目录/内核日志一次看全
+ksud kpm doctor                               # 排障：接口/feature/ioctl/目录/standalone/内核日志
 ```
 
 管理器里：设置 → KernelPatch modules。
 
 ## 上机自检清单（M6）
 
-先跑 ksud kpm doctor：它会打印内核版本、UAPI、feature 状态、一次 list ioctl 往返、/data/adb/kpm 目录和最近的 kpm 内核日志。接口缺失、feature 关闭、ioctl 不通这三类问题一句话就能定位。
+先跑 ksud kpm doctor：它会打印内核版本、UAPI、feature 状态、一次 list ioctl 往返、`/data/adb/kpm` 目录、控制通道由谁提供（`standalone:` 一行）和最近的 kpm 内核日志。接口缺失、feature 关闭、ioctl 不通这三类问题一句话就能定位。
 
 然后按顺序做，每步先看 `dmesg | grep -i kpm`。
 

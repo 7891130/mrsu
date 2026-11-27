@@ -241,6 +241,17 @@ fun kpmUnstageReport(name: String): String = runKsud("kpm unstage ${shellQuote(n
 /** Load a plain kernel module (.ko) with symbol resolution, for the report. */
 fun insmodReport(path: String): String = runKsud("insmod ${shellQuote(path)}")
 
+/** Run the module's ctl0 entry with free-form arguments, returning the report. */
+fun kpmCtl0Report(name: String, args: String): String =
+    if (args.isEmpty()) runKsud("kpm ctl0 ${shellQuote(name)}")
+    else runKsud("kpm ctl0 ${shellQuote(name)} ${shellQuote(args)}")
+
+/** Load the ksud-bundled standalone runtime (kpm.ko) and return the report. */
+fun kpmInsmodRuntimeReport(): String = runKsud("kpm insmod")
+
+/** Collect the runtime's triage output (`ksud kpm doctor`). */
+fun kpmDoctorReport(): String = runKsud("kpm doctor")
+
 fun install() {
     val start = SystemClock.elapsedRealtime()
     val libadbroot = File(ksuApp.applicationInfo.nativeLibraryDir, "libadbroot.so").absolutePath

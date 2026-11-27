@@ -1,6 +1,7 @@
 //! Userspace side of the KPM (KernelPatch module) runtime.
 
 use anyhow::{Context, Result, bail};
+use rustix::cstr;
 use std::ffi::CString;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -317,6 +318,40 @@ pub fn list_staged() -> Result<()> {
     Ok(())
 }
 
+/// Load the standalone runtime (kpm.ko) that this ksud embeds.
+///
+/// kpm.ko carries the whole runtime -- ELF loader, hook engine, kfuncs and its
+/// own module table -- and takes the KPM control channel over as soon as its
+/// init runs. `kpm load|list|...` therefore keep working unchanged; from then
+/// on they land in kpm.ko's table (dmesg: "control channel now served by
+/// kpm.ko"). This is the deployability path: a KernelSU module can hand out KPM
+/// by insmod'ing this ko, without touching the boot image.
+pub fn insmod(kmi: Option<String>) -> Result<()> {
+    ensure_supported()?;
+
+    if Path::new("/sys/module/kpm").exists() {
+        bail!("kpm.ko is already loaded; `rmmod kpm` unloads it together with its modules");
+    }
+
+    let kmi = match kmi {
+        Some(kmi) => kmi,
+        None => crate::boot_patch::get_current_kmi().context("failed to detect the current KMI")?,
+    };
+
+    let ko_name = format!("{kmi}_kpm.ko");
+    let data = crate::assets::get_asset_data(&ko_name).with_context(|| {
+        format!(
+            "this ksud does not embed {ko_name}; the standalone runtime only ships for aarch64"
+        )
+    })?;
+
+    ksuinit::load_module(&data, cstr!("")).with_context(|| format!("failed to load {ko_name}"))?;
+
+    println!("{ko_name} loaded");
+    println!("control channel now served by kpm.ko");
+    Ok(())
+}
+
 /// Print everything needed to triage the runtime on a fresh device.
 ///
 /// The kernel side cannot be debugged interactively, so this gathers the
@@ -383,6 +418,21 @@ pub fn doctor() -> Result<()> {
             "symbol lookup available"
         } else {
             "kallsyms fallback only"
+        }
+    );
+
+    // 独立运行时是否接管了控制通道：kpm.ko 是独立内核模块，加载后 /sys/module/kpm 存在。
+    let standalone_loaded = Path::new("/sys/module/kpm").exists();
+    let embedded = crate::boot_patch::get_current_kmi()
+        .ok()
+        .map(|kmi| crate::assets::get_asset_data(&format!("{kmi}_kpm.ko")).is_ok())
+        .unwrap_or(false);
+    println!(
+        "standalone     : {}",
+        match (standalone_loaded, embedded) {
+            (true, _) => "loaded (kpm.ko owns the control channel)",
+            (false, true) => "not loaded; bundled ko available (`ksud kpm insmod`)",
+            (false, false) => "not loaded; this ksud bundles no kpm.ko for the current KMI",
         }
     );
 

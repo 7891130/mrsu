@@ -72,6 +72,12 @@ enum Kpm {
     },
     /// List the .kpm images staged for boot
     Staged,
+    /// Load the ksud-bundled standalone runtime (kpm.ko) into the kernel
+    Insmod {
+        /// kernel KMI version instead of auto-detection
+        #[arg(long)]
+        kmi: Option<String>,
+    },
     /// Print runtime state for troubleshooting
     Doctor,
 }
@@ -617,6 +623,7 @@ pub fn run() -> Result<()> {
             Kpm::Stage { module } => kpm::stage(&module),
             Kpm::Unstage { name } => kpm::unstage(&name),
             Kpm::Staged => kpm::list_staged(),
+            Kpm::Insmod { kmi } => kpm::insmod(kmi),
             Kpm::Doctor => kpm::doctor(),
         },
 
