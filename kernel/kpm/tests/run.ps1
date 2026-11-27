@@ -53,7 +53,7 @@ Invoke-Suite -Label '[9/10] standalone runtime' -Test 'test_standalone.c' -Sourc
 Write-Host ''
 Write-Host '== [10/10] sample module'
 $sampleExe = Join-Path $out 'test_sample'
-& gcc @common -o $sampleExe (Join-Path $here 'test_sample.c') (Join-Path $kpm 'kpm_elf.c') (Join-Path $kpm 'kpm_reloc.c')
+& gcc @common -o $sampleExe (Join-Path $here 'test_sample.c')
 if ($LASTEXITCODE -ne 0) { throw 'sample module test failed to compile' }
 & $sampleExe (Join-Path $here '..\samples\ptest\ptest.kpm')
 if ($LASTEXITCODE -ne 0) { $failed = 1 }

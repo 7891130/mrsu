@@ -54,12 +54,13 @@ suite '[6/10] hook frames'            test_hook_fargs.c  "$kdir/kpm/kpm_hook_cha
 suite '[7/10] module table + owner routing' test_core.c  "$here/host_fs.c" "$kdir/kpm/kpm_core.c" "$kdir/kpm/kpm_table.c"
 suite '[8/10] kfunc layer'            test_kfunc.c       "$kdir/kpm/kpm_kfunc.c"
 suite '[9/10] standalone runtime'    test_standalone.c  "$here/host_fs.c" "$kdir/kpm/kpm_standalone.c" "$kdir/kpm/kpm_core.c" "$kdir/kpm/kpm_table.c"
-# Loads the committed sample module (samples/ptest) through the real loader, so
+# Validates the committed sample module (samples/ptest) from the loader
+# side. It cannot be *loaded* here: loading runs its AArch64 init on the host.
 # the suite covers a compiler-produced .kpm and not only hand-built images.
 echo
 echo "== [10/10] sample module"
 sampleExe="$out/test_sample"
-if ! gcc "${common[@]}" -o "$sampleExe" "$here/test_sample.c" "$kdir/kpm/kpm_elf.c" "$kdir/kpm/kpm_reloc.c"; then
+if ! gcc "${common[@]}" -o "$sampleExe" "$here/test_sample.c"; then
     echo "compile failed: test_sample.c" >&2
     failed=1
 else

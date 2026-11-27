@@ -1,57 +1,71 @@
 /*
- * Host-side test for a *real* .kpm: loads samples/ptest/ptest.kpm through the
- * shipping loader (kernel/kpm/kpm_elf.c).
+ * Structural validation of the committed sample module
+ * (kernel/kpm/samples/ptest/ptest.kpm).
  *
- * The other suites build their images by hand, which proves the loader against
- * the layout its author had in mind. This one uses an image produced by a
- * compiler (NDK clang, aarch64 ET_REL) from the sample source, so it also
- * covers what a toolchain actually emits: ADRP+ADD into .bss, ABS64 in the
- * entry slots, a NOBITS section, .comment/.note.GNU-stack that must be skipped.
+ * The other suites load *synthetic* images through the real loader, because
+ * their entries are host functions. A compiler-produced .kpm cannot be loaded
+ * here: kpm_elf_load() finishes by calling the module's init, and that init is
+ * AArch64 machine code -- the host would execute garbage. (The first version of
+ * this test did exactly that and died with SIGSEGV.) Calling the entries is
+ * what the device does; see samples/ptest/README.md for the dmesg lines.
  *
- * The sample defines no external symbols on purpose, so a failure here can only
- * be the loader, never a missing kfunc.
+ * So this suite validates the image instead, from the loader's point of view:
+ *
+ *   - an AArch64 ET_REL with sane section-header geometry;
+ *   - the five .kpm.* entry sections exist, are SHF_ALLOC, hold exactly one
+ *     8-byte, 8-byte-aligned pointer (the loader reads a function pointer out
+ *     of each of them);
+ *   - .kpm.info really carries name= / version= / license=;
+ *   - the sample has no undefined symbols -- that is its whole point, since a
+ *     failure to load it can then only be the loader;
+ *   - every relocation points at a real section, inside that section, at a real
+ *     symbol: a truncated or hand-mangled image fails here rather than on the
+ *     device.
+ *
+ * Relocation *type* coverage is deliberately not asserted: the numbers live in
+ * the toolchain's headers, the loader rejects unknown ones with -ENOEXEC and a
+ * message naming the type, and suites [1/10]/[2/10] exercise the supported set
+ * directly.
  */
-#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include <linux/types.h>
+#define ET_REL 1
+#define EM_AARCH64 183
+#define SHT_SYMTAB 2
+#define SHT_RELA 4
+#define SHF_ALLOC 0x2
 
-#include "kpm/kpm.h"
+struct ehdr {
+    unsigned char ident[16];
+    uint16_t type, machine;
+    uint32_t version;
+    uint64_t entry, phoff, shoff;
+    uint32_t flags;
+    uint16_t ehsize, phentsize, phnum, shentsize, shnum, shstrndx;
+};
 
-/* --- stubs the loader links against -------------------------------------- */
+struct shdr {
+    uint32_t name, type;
+    uint64_t flags, addr, offset, size;
+    uint32_t link, info;
+    uint64_t addralign, entsize;
+};
 
-void *kpm_alloc_exec(size_t size)
-{
-    return calloc(1, size);
-}
+struct sym {
+    uint32_t name;
+    unsigned char info, other;
+    uint16_t shndx;
+    uint64_t value, size;
+};
 
-int kpm_protect_exec(void *addr, size_t size)
-{
-    (void)addr;
-    (void)size;
-    return 0;
-}
-
-void kpm_free_exec(void *addr, size_t size)
-{
-    (void)size;
-    free(addr);
-}
-
-/* The sample has no undefined symbols; the resolver must never be needed. */
-static int resolve_calls;
-
-u64 kpm_symbol_lookup(const char *name)
-{
-    resolve_calls++;
-    fprintf(stderr, "unexpected symbol lookup: %s\n", name ? name : "(null)");
-    return 0;
-}
-
-/* --- harness ------------------------------------------------------------- */
+struct rela {
+    uint64_t offset;
+    uint64_t info;
+    int64_t addend;
+};
 
 static int failures;
 
@@ -65,47 +79,39 @@ static void check(int cond, const char *what)
     }
 }
 
-static unsigned char *read_file(const char *path, size_t *len)
+static int find_section(const struct shdr *sh, unsigned int shnum, const char *shstr, const char *name)
 {
-    FILE *f = fopen(path, "rb");
+    unsigned int i;
+
+    for (i = 1; i < shnum; i++) {
+        if (!strcmp(shstr + sh[i].name, name))
+            return (int)i;
+    }
+    return -1;
+}
+
+static int contains(const char *buf, size_t len, const char *needle)
+{
+    size_t n = strlen(needle), i;
+
+    for (i = 0; i + n <= len; i++) {
+        if (!memcmp(buf + i, needle, n))
+            return 1;
+    }
+    return 0;
+}
+
+int main(int argc, char **argv)
+{
     unsigned char *buf;
+    struct ehdr *eh;
+    struct shdr *sh;
+    const char *shstr;
     long size;
-
-    if (!f) {
-        fprintf(stderr, "cannot open %s\n", path);
-        return NULL;
-    }
-    if (fseek(f, 0, SEEK_END) || (size = ftell(f)) <= 0 || fseek(f, 0, SEEK_SET)) {
-        fclose(f);
-        fprintf(stderr, "cannot size %s\n", path);
-        return NULL;
-    }
-    buf = malloc((size_t)size);
-    if (!buf || fread(buf, 1, (size_t)size, f) != (size_t)size) {
-        fclose(f);
-        free(buf);
-        fprintf(stderr, "cannot read %s\n", path);
-        return NULL;
-    }
-    fclose(f);
-    *len = (size_t)size;
-    return buf;
-}
-
-static int entry_in_image(const struct kpm_module *mod, const void *entry)
-{
-    uintptr_t e = (uintptr_t)entry;
-    uintptr_t base = (uintptr_t)mod->image;
-
-    return mod->image != NULL && e >= base && e < base + mod->image_size;
-}
-
-int main(int argc, char **argv){
-    struct kpm_module mod;
-    char err[200];
-    unsigned char *data;
-    size_t len = 0;
-    long rc;
+    FILE *f;
+    int init, exit_, ctl0, ctl1, event, info, symtab;
+    unsigned int i, symcount = 0;
+    int undef = 0, relocs = 0, bad_relocs = 0;
 
     setvbuf(stdout, NULL, _IONBF, 0);
 
@@ -113,56 +119,134 @@ int main(int argc, char **argv){
         fprintf(stderr, "usage: %s <ptest.kpm>\n", argv[0]);
         return 2;
     }
-
-    data = read_file(argv[1], &len);
-    if (!data)
+    f = fopen(argv[1], "rb");
+    if (!f) {
+        fprintf(stderr, "cannot open %s\n", argv[1]);
         return 2;
+    }
+    if (fseek(f, 0, SEEK_END) || (size = ftell(f)) < 64 || fseek(f, 0, SEEK_SET)) {
+        fprintf(stderr, "cannot size %s\n", argv[1]);
+        return 2;
+    }
+    buf = malloc((size_t)size);
+    if (!buf || fread(buf, 1, (size_t)size, f) != (size_t)size) {
+        fprintf(stderr, "cannot read %s\n", argv[1]);
+        return 2;
+    }
+    fclose(f);
 
-    puts("loading the compiler-built sample");
-    memset(&mod, 0, sizeof(mod));
-    err[0] = '\0';
-    rc = kpm_elf_load(&mod, data, len, "arg=hello", NULL, err, sizeof(err));
-    printf("  loader rc=%ld err=\"%s\"\n", rc, err);
-    check(rc == 0, "the real loader accepts a clang-built .kpm");
-
-    if (rc != 0) {
-        free(data);
-        printf("\n%d check(s) failed\n", failures);
+    eh = (struct ehdr *)buf;
+    puts("ELF header");
+    check(!memcmp(eh->ident, "\x7f" "ELF", 4), "ELF magic");
+    check(eh->ident[4] == 2, "ELFCLASS64");
+    check(eh->type == ET_REL, "ET_REL (a .kpm is a relocatable object, not a module)");
+    check(eh->machine == EM_AARCH64, "EM_AARCH64");
+    check(eh->shentsize == sizeof(struct shdr), "section header entry size");
+    check(eh->shnum > 1 && eh->shnum < 64, "section count is sane");
+    if (eh->shoff + (uint64_t)eh->shnum * sizeof(struct shdr) > (uint64_t)size) {
+        printf("  FAIL section headers are inside the file\n");
+        printf("\n1 check(s) failed\n");
         return 1;
     }
+    puts("  section headers fit in the file");
 
-    puts("metadata");
-    check(strcmp(mod.name, "ptest") == 0, ".kpm.info name");
-    check(strcmp(mod.version, "0.1") == 0, ".kpm.info version");
-    check(strcmp(mod.license, "GPL") == 0, ".kpm.info license");
-    check(strcmp(mod.author, "MRSU") == 0, ".kpm.info author");
-    check(strstr(mod.description, "smoke test") != NULL, ".kpm.info description");
-    check(mod.args && strcmp(mod.args, "arg=hello") == 0, "module args kept");
+    sh = (struct shdr *)(buf + eh->shoff);
+    shstr = (const char *)buf + sh[eh->shstrndx].offset;
 
-    puts("entries");
-    check(mod.init != NULL, ".kpm.init slot bound");
-    check(mod.exit != NULL, ".kpm.exit slot bound");
-    check(mod.ctl0 != NULL, ".kpm.ctl0 slot bound");
-    check(mod.ctl1 != NULL, ".kpm.ctl1 slot bound");
-    check(mod.event != NULL, ".kpm.event slot bound");
+    puts("entry sections");
+    init = find_section(sh, eh->shnum, shstr, ".kpm.init");
+    exit_ = find_section(sh, eh->shnum, shstr, ".kpm.exit");
+    ctl0 = find_section(sh, eh->shnum, shstr, ".kpm.ctl0");
+    ctl1 = find_section(sh, eh->shnum, shstr, ".kpm.ctl1");
+    event = find_section(sh, eh->shnum, shstr, ".kpm.event");
+    info = find_section(sh, eh->shnum, shstr, ".kpm.info");
+    symtab = find_section(sh, eh->shnum, shstr, ".symtab");
+    check(init > 0, ".kpm.init exists");
+    check(exit_ > 0, ".kpm.exit exists");
+    check(ctl0 > 0, ".kpm.ctl0 exists");
+    check(ctl1 > 0, ".kpm.ctl1 exists");
+    check(event > 0, ".kpm.event exists");
+    check(info > 0, ".kpm.info exists");
+    check(symtab > 0, ".symtab exists (the loader needs it)");
 
-    // The entries are AArch64 machine code -- this harness runs on the host, so
-    // calling them would execute the wrong instruction set. What can be checked
-    // here is that the ABS64 relocation in each slot produced an address inside
-    // the loaded image (and not 0, a file offset or a stale value).
-    puts("entry relocation");
-    check(entry_in_image(&mod, (const void *)mod.init), "init points into the image");
-    check(entry_in_image(&mod, (const void *)mod.exit), "exit points into the image");
-    check(entry_in_image(&mod, (const void *)mod.ctl0), "ctl0 points into the image");
-    check(entry_in_image(&mod, (const void *)mod.ctl1), "ctl1 points into the image");
-    check(entry_in_image(&mod, (const void *)mod.event), "event points into the image");
-    check((const void *)mod.init != (const void *)mod.exit, "distinct entries stay distinct");
-    check(resolve_calls == 0, "no symbol resolution was needed");
+    if (init > 0 && exit_ > 0 && ctl0 > 0 && ctl1 > 0 && event > 0) {
+        int idx[5];
+        static const char *names[5] = { ".kpm.init", ".kpm.exit", ".kpm.ctl0", ".kpm.ctl1", ".kpm.event" };
 
-    puts("release");
-    kpm_elf_release(&mod);
-    free(data);
+        idx[0] = init;
+        idx[1] = exit_;
+        idx[2] = ctl0;
+        idx[3] = ctl1;
+        idx[4] = event;
+        for (i = 0; i < 5; i++) {
+            const struct shdr *s = &sh[idx[i]];
+            char label[80];
 
+            snprintf(label, sizeof(label), "%s is SHF_ALLOC", names[i]);
+            check((s->flags & SHF_ALLOC) != 0, label);
+            snprintf(label, sizeof(label), "%s holds one 8-byte pointer", names[i]);
+            check(s->size == 8, label);
+            snprintf(label, sizeof(label), "%s is 8-byte aligned", names[i]);
+            check(s->addralign >= 8, label);
+        }
+    }
+
+    puts(".kpm.info");
+    if (info > 0) {
+        const char *base = (const char *)buf + sh[info].offset;
+        size_t len = (size_t)sh[info].size;
+
+        check(contains(base, len, "name="), "carries name=");
+        check(contains(base, len, "version="), "carries version=");
+        check(contains(base, len, "license="), "carries license=");
+    }
+
+    puts("symbols");
+    if (symtab > 0) {
+        symcount = (unsigned int)(sh[symtab].size / sizeof(struct sym));
+        const struct sym *syms = (const struct sym *)(buf + sh[symtab].offset);
+
+        for (i = 1; i < symcount; i++) {
+            if (syms[i].shndx == 0)
+                undef++;
+        }
+        printf("  (%u symbols)\n", symcount);
+    }
+    check(symcount > 1, "the symbol table is not empty");
+    check(undef == 0, "no undefined symbols (so a load failure can only be the loader)");
+
+    puts("relocations");
+    for (i = 1; i < eh->shnum; i++) {
+        const struct shdr *s = &sh[i];
+        unsigned int n, k;
+        const struct rela *rela;
+
+        if (s->type != SHT_RELA)
+            continue;
+        if (s->info == 0 || s->info >= eh->shnum) {
+            printf("  FAIL %s targets an invalid section\n", shstr + s->name);
+            failures++;
+            continue;
+        }
+        n = (unsigned int)(s->size / sizeof(struct rela));
+        rela = (const struct rela *)(buf + s->offset);
+        for (k = 0; k < n; k++) {
+            unsigned int symidx = (unsigned int)(rela[k].info >> 32);
+
+            relocs++;
+            if (rela[k].offset >= sh[s->info].size) {
+                bad_relocs++;
+                continue;
+            }
+            if (symcount && symidx >= symcount)
+                bad_relocs++;
+        }
+    }
+    printf("  (%d relocations)\n", relocs);
+    check(relocs > 0, "the image carries relocations (entries are bound by them)");
+    check(bad_relocs == 0, "every relocation targets a valid section, offset and symbol");
+
+    free(buf);
     if (failures) {
         printf("\n%d check(s) failed\n", failures);
         return 1;
